@@ -1,0 +1,608 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"/>
+  <title>Voter Login — VoteSecure</title>
+  <link rel="stylesheet" href="/css/style.css"/>
+  <script src="https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/dist/face-api.min.js"></script>
+  <style>
+    *{-webkit-tap-highlight-color:transparent;box-sizing:border-box;}
+    body{background:linear-gradient(135deg,#0f172a 0%,#1e1b4b 60%,#312e81 100%);min-height:100vh;}
+
+    .page{display:flex;flex-direction:column;align-items:center;justify-content:flex-start;padding:16px 14px 40px;min-height:calc(100vh - 58px);}
+    .card{background:white;border-radius:22px;padding:24px;width:100%;max-width:460px;box-shadow:0 20px 60px rgba(0,0,0,.4);}
+
+    /* ── Inputs ── */
+    .flabel{font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.06em;color:#64748b;display:block;margin-bottom:5px;}
+    .finput{width:100%;padding:14px 16px;border:2px solid #e2e8f0;border-radius:12px;font-size:1.1rem;font-weight:700;letter-spacing:.08em;text-transform:uppercase;text-align:center;outline:none;transition:all .2s;}
+    .finput:focus{border-color:#4f46e5;box-shadow:0 0 0 3px rgba(79,70,229,.12);}
+
+    /* ── Buttons ── */
+    .big-btn{width:100%;height:54px;border-radius:14px;border:none;font-size:16px;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;transition:all .2s;touch-action:manipulation;}
+    .big-btn.primary{background:#4f46e5;color:white;}
+    .big-btn.primary:active{background:#3730a3;}
+    .big-btn.primary:disabled{background:#a5b4fc;cursor:not-allowed;}
+    .big-btn.secondary{background:#f1f5f9;color:#0f172a;font-size:14px;}
+    .big-btn.warning{background:#d97706;color:white;font-size:14px;}
+
+    /* ── Camera box ── */
+    .cam-box{position:relative;background:#000;border-radius:20px;overflow:hidden;width:100%;aspect-ratio:3/4;max-height:380px;}
+    .cam-box video{width:100%;height:100%;object-fit:cover;display:block;}
+    .cam-top{position:absolute;top:0;left:0;right:0;padding:10px 12px;display:flex;justify-content:space-between;align-items:center;background:linear-gradient(to bottom,rgba(0,0,0,.7),transparent);}
+    .light-chip{padding:4px 10px;border-radius:99px;font-size:11px;font-weight:700;color:white;background:rgba(0,0,0,.5);}
+    .cam-icon-btn{width:36px;height:36px;background:rgba(255,255,255,.15);border:none;border-radius:50%;color:white;font-size:16px;cursor:pointer;display:flex;align-items:center;justify-content:center;backdrop-filter:blur(8px);}
+    .cam-icon-btn.on{background:rgba(79,70,229,.75);}
+
+    /* ── Oval guide ── */
+    .oval-guide{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none;}
+    .oval{width:55%;height:75%;border-radius:50%;border:3px solid rgba(255,255,255,.5);box-shadow:0 0 0 9999px rgba(0,0,0,.45);transition:all .25s;}
+    .oval.scan  {border-color:#f59e0b;box-shadow:0 0 0 9999px rgba(0,0,0,.45),0 0 0 3px rgba(245,158,11,.5);animation:scanAnim 1s infinite;}
+    .oval.match {border-color:#10b981;box-shadow:0 0 0 9999px rgba(0,0,0,.35),0 0 30px rgba(16,185,129,.8),0 0 0 5px rgba(16,185,129,.4);}
+    .oval.nomatch{border-color:#ef4444;box-shadow:0 0 0 9999px rgba(0,0,0,.45),0 0 20px rgba(239,68,68,.6);}
+    @keyframes scanAnim{0%,100%{box-shadow:0 0 0 9999px rgba(0,0,0,.45),0 0 0 3px rgba(245,158,11,.3);}50%{box-shadow:0 0 0 9999px rgba(0,0,0,.45),0 0 0 8px rgba(245,158,11,.6);}}
+
+    /* ── LIVE match score ring ── */
+    .score-ring-wrap{position:absolute;bottom:70px;left:50%;transform:translateX(-50%);pointer-events:none;}
+    .score-ring{width:70px;height:70px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:900;font-size:1rem;color:white;border:4px solid rgba(255,255,255,.3);background:rgba(0,0,0,.6);backdrop-filter:blur(8px);transition:all .3s;}
+
+    /* ── Status bar ── */
+    .cam-bottom{position:absolute;bottom:0;left:0;right:0;padding:10px 12px;background:linear-gradient(to top,rgba(0,0,0,.8),transparent);}
+    .status-txt{color:white;font-size:13px;font-weight:600;text-align:center;}
+
+    /* ── Alert ── */
+    .msg{padding:12px 14px;border-radius:10px;font-size:13px;font-weight:600;margin-top:10px;}
+    .msg.err {background:#fee2e2;color:#b91c1c;border:1px solid #fecaca;}
+    .msg.ok  {background:#dcfce7;color:#15803d;border:1px solid #bbf7d0;}
+    .msg.warn{background:#fef3c7;color:#a16207;border:1px solid #fde68a;}
+    .msg.info{background:#e0e7ff;color:#4338ca;border:1px solid #c7d2fe;}
+
+    @keyframes spin{to{transform:rotate(360deg);}}
+    .spin{width:18px;height:18px;border:2px solid rgba(255,255,255,.3);border-top-color:white;border-radius:50%;animation:spin .6s linear infinite;}
+
+    /* ── Success overlay ── */
+    .success-overlay{position:absolute;inset:0;background:rgba(16,185,129,.85);display:flex;flex-direction:column;align-items:center;justify-content:center;color:white;border-radius:20px;}
+    .success-overlay .big-tick{font-size:5rem;animation:popIn .4s ease;}
+    @keyframes popIn{from{transform:scale(0);}to{transform:scale(1);}}
+  </style>
+</head>
+<body>
+
+<nav style="background:rgba(255,255,255,.06);backdrop-filter:blur(12px);border-bottom:1px solid rgba(255,255,255,.1);padding:0 20px;height:58px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:100;">
+  <a href="/" style="color:white;font-weight:800;font-size:1.1rem;text-decoration:none;">🗳️ VoteSecure</a>
+  <a href="/register" style="color:rgba(255,255,255,.7);font-size:13px;text-decoration:none;">New? Register →</a>
+</nav>
+
+<div class="page">
+
+  <!-- ── VOTER ID CARD ── -->
+  <div class="card" id="idCard" style="margin-top:20px;">
+    <div style="text-align:center;margin-bottom:22px;">
+      <div style="font-size:2.5rem;margin-bottom:8px;">🧑‍💼</div>
+      <h1 style="font-size:1.4rem;margin-bottom:4px;">Voter Login</h1>
+      <p style="color:#64748b;font-size:14px;">Enter your Voter ID to begin</p>
+    </div>
+    <div id="idAlert"></div>
+    <div style="margin-bottom:16px;">
+      <label class="flabel">Voter ID</label>
+      <input id="voteridInput" class="finput" type="text" placeholder="VTR-XXXXX"
+        autocomplete="off" autocorrect="off" autocapitalize="characters" inputmode="text"
+        spellcheck="false"/>
+    </div>
+    <button class="big-btn primary" id="findBtn" onclick="findVoter()">
+      Continue → Face Scan
+    </button>
+    <div style="text-align:center;margin-top:14px;">
+      <a href="/" style="font-size:13px;color:#94a3b8;">← Home</a>
+    </div>
+  </div>
+
+  <!-- ── FACE VERIFY CARD ── -->
+  <div class="card hidden" id="faceCard" style="margin-top:20px;">
+    <div style="margin-bottom:14px;">
+      <p style="font-size:12px;color:#94a3b8;margin-bottom:2px;">Logged in as</p>
+      <div style="display:flex;align-items:center;justify-content:space-between;">
+        <strong id="voterNameDisplay" style="font-size:1rem;">—</strong>
+        <span id="voterIdBadge" style="font-family:monospace;font-size:13px;background:#e0e7ff;color:#4338ca;padding:3px 10px;border-radius:99px;font-weight:700;">—</span>
+      </div>
+    </div>
+
+    <div id="faceAlert"></div>
+
+    <!-- Loading -->
+    <div id="faceLoad" style="text-align:center;padding:28px 10px;">
+      <div style="font-size:2.5rem;margin-bottom:12px;">🤖</div>
+      <p id="faceLoadTxt" style="font-weight:700;font-size:14px;margin-bottom:10px;">Initialising…</p>
+      <div style="background:#f1f5f9;border-radius:99px;height:5px;overflow:hidden;max-width:200px;margin:0 auto;">
+        <div id="faceLoadBar" style="height:100%;background:#4f46e5;border-radius:99px;width:5%;transition:width .4s;"></div>
+      </div>
+    </div>
+
+    <!-- Camera -->
+    <div id="faceCamWrap" style="display:none;">
+      <div class="cam-box" id="camBox">
+        <video id="faceVideo" autoplay muted playsinline></video>
+
+        <div class="cam-top">
+          <div class="light-chip" id="lightChip">💡 —</div>
+          <div style="display:flex;gap:8px;">
+            <button class="cam-icon-btn" onclick="flipCam()">🔄</button>
+            <button class="cam-icon-btn" id="boostBtn" onclick="toggleBoost()">☀️</button>
+          </div>
+        </div>
+
+        <div class="oval-guide"><div class="oval" id="faceOval"></div></div>
+
+        <!-- ✅ LIVE MATCH SCORE shown inside camera while scanning -->
+        <div class="score-ring-wrap" id="scoreRingWrap" style="display:none;">
+          <div class="score-ring" id="scoreRing">—%</div>
+        </div>
+
+        <!-- Success overlay -->
+        <div class="success-overlay hidden" id="successOverlay">
+          <div class="big-tick">✅</div>
+          <div style="font-size:1.1rem;font-weight:800;margin-top:10px;">Verified!</div>
+          <div style="font-size:14px;opacity:.85;margin-top:4px;">Redirecting…</div>
+        </div>
+
+        <div class="cam-bottom">
+          <div class="status-txt" id="faceStatus">👤 Align your face in the oval</div>
+        </div>
+      </div>
+
+      <div style="font-size:12px;color:rgba(255,255,255,.4);text-align:center;margin:8px 0 12px;">
+        🔄 flip camera &nbsp;·&nbsp; ☀️ boost light &nbsp;·&nbsp; Hold face still
+      </div>
+
+      <div id="manualWarn" style="display:none;" class="msg warn">
+        ⚠️ Not detecting? Try ☀️ or tap Manual Verify below.
+      </div>
+
+      <div style="display:flex;gap:10px;margin-top:6px;">
+        <button class="big-btn secondary" style="max-width:70px;" onclick="backToId()">← Back</button>
+        <button class="big-btn primary" id="verifyBtn" onclick="doVerify()" disabled>🔍 Verify Now</button>
+      </div>
+      <button class="big-btn warning" id="manualVerifyBtn" onclick="manualVerify()" style="margin-top:8px;display:none;">
+        🔓 Manual Verify (Override)
+      </button>
+    </div>
+  </div>
+
+</div>
+
+<script>
+// ════════════════════════════════════════════════════════════
+// ADVANCED FACE VERIFICATION
+// - SSD MobileNet = much better accuracy
+// - LIVE real-time match score shown in camera
+// - Auto-verify when confidence ≥ threshold
+// - Multi-attempt with adaptive thresholds
+// - Low-light auto-enhancement
+// ════════════════════════════════════════════════════════════
+
+const $  = id => document.getElementById(id);
+let stream       = null;
+let detectTimer  = null;
+let fallTimer    = null;
+let modelsOK     = false;
+let voterInfo    = null;
+let storedDesc   = null;   // Float32Array from DB
+let lux          = 150;
+let facingMode   = 'user';
+let boost        = false;
+let verifying    = false;
+let autoVerified = false;
+
+// Rolling buffer of last 5 live descriptors for stability
+let liveDescBuffer = [];
+
+const CDN  = 'https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/weights';
+const CDN2 = 'https://raw.githubusercontent.com/justadudewhohacks/face-api.js/master/weights';
+
+// ── Step 1: find voter ────────────────────────────────────────────────────────
+async function findVoter() {
+  const raw = $('voteridInput').value.trim().toUpperCase();
+  if (!raw) {
+    $('idAlert').innerHTML = '<div class="msg err">Please enter your Voter ID.</div>';
+    return;
+  }
+  const btn = $('findBtn');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spin"></span> Looking up…';
+
+  try {
+    const res  = await fetch('/api/voter/login', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ voterId: raw })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error);
+
+    voterInfo  = data.voter;
+    storedDesc = new Float32Array(data.voter.faceDescriptor);
+
+    $('voterNameDisplay').textContent = data.voter.name;
+    $('voterIdBadge').textContent     = data.voter.voterId;
+
+    $('idCard').classList.add('hidden');
+    $('faceCard').classList.remove('hidden');
+    await startFaceCamera();
+  } catch (e) {
+    $('idAlert').innerHTML = `<div class="msg err">❌ ${e.message}</div>`;
+    btn.disabled = false;
+    btn.innerHTML = 'Continue → Face Scan';
+  }
+}
+
+function backToId() {
+  stopAll();
+  $('faceCard').classList.add('hidden');
+  $('idCard').classList.remove('hidden');
+  $('findBtn').disabled = false;
+  $('findBtn').innerHTML = 'Continue → Face Scan';
+  resetFaceUI();
+}
+
+function resetFaceUI() {
+  $('faceLoad').style.display     = 'block';
+  $('faceCamWrap').style.display  = 'none';
+  $('faceAlert').innerHTML        = '';
+  $('faceLoadTxt').textContent    = 'Initialising…';
+  $('faceLoadBar').style.width    = '5%';
+  $('scoreRingWrap').style.display= 'none';
+  $('manualWarn').style.display   = 'none';
+  $('manualVerifyBtn').style.display = 'none';
+  $('verifyBtn').disabled = true;
+  $('successOverlay').classList.add('hidden');
+  autoVerified = false;
+  liveDescBuffer = [];
+}
+
+// ── Camera ────────────────────────────────────────────────────────────────────
+async function startFaceCamera() {
+  resetFaceUI();
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({
+      video: {
+        facingMode,
+        width:  { ideal:1280 }, height: { ideal:960 },
+        frameRate: { ideal:30 },
+        advanced: [{ exposureMode:'continuous' },{ whiteBalanceMode:'continuous' }]
+      }
+    }).catch(() =>
+      navigator.mediaDevices.getUserMedia({ video:{ facingMode, width:{ ideal:640 }, height:{ ideal:480 } } })
+    );
+  } catch (e) {
+    $('faceLoad').style.display = 'none';
+    $('faceAlert').innerHTML = '<div class="msg err">📷 Camera blocked. Allow camera in browser settings.</div>';
+    return;
+  }
+
+  $('faceVideo').srcObject = stream;
+  $('faceVideo').play();
+  applyFilter();
+  showFaceLoad('Camera ready. Loading AI…', 20);
+  await loadModels();
+}
+
+function applyFilter() {
+  $('faceVideo').style.filter = boost
+    ? 'brightness(2.0) contrast(1.5) saturate(1.1)'
+    : 'brightness(1.4) contrast(1.2)';
+}
+
+async function flipCam() {
+  stopDetection();
+  if (stream) stream.getTracks().forEach(t=>t.stop()); stream=null;
+  facingMode = facingMode==='user' ? 'environment' : 'user';
+  await startFaceCamera();
+}
+
+function toggleBoost() {
+  boost = !boost;
+  $('boostBtn').classList.toggle('on', boost);
+  applyFilter();
+}
+
+// ── Load models ───────────────────────────────────────────────────────────────
+async function loadModels() {
+  if (modelsOK) { onModelsOK(); return; }
+
+  for (const url of [CDN, CDN2]) {
+    try {
+      showFaceLoad('Loading face detector…', 38);
+      await faceapi.nets.ssdMobilenetv1.loadFromUri(url);
+      showFaceLoad('Loading landmarks…', 62);
+      await faceapi.nets.faceLandmark68Net.loadFromUri(url);
+      showFaceLoad('Loading recognition…', 84);
+      await faceapi.nets.faceRecognitionNet.loadFromUri(url);
+      modelsOK = true;
+      showFaceLoad('✅ Ready!', 100);
+      setTimeout(onModelsOK, 300);
+      return;
+    } catch (e) { console.warn('CDN failed:', url); }
+  }
+
+  // Fallback tiny models
+  for (const url of [CDN, CDN2]) {
+    try {
+      await faceapi.nets.tinyFaceDetector.loadFromUri(url);
+      await faceapi.nets.faceLandmark68TinyNet.loadFromUri(url);
+      await faceapi.nets.faceRecognitionNet.loadFromUri(url);
+      modelsOK = true;
+      window._useTiny = true;
+      setTimeout(onModelsOK, 300);
+      return;
+    } catch (e) {}
+  }
+
+  // All failed
+  $('faceAlert').innerHTML = '<div class="msg warn">⚠️ AI unavailable. Manual verify mode.</div>';
+  $('faceLoad').style.display    = 'none';
+  $('faceCamWrap').style.display = 'block';
+  $('verifyBtn').disabled = false;
+  $('verifyBtn').textContent = '🔓 Manual Verify';
+  $('verifyBtn').onclick = manualVerify;
+}
+
+function showFaceLoad(txt, pct) {
+  $('faceLoadTxt').textContent  = txt;
+  $('faceLoadBar').style.width  = pct + '%';
+}
+
+function onModelsOK() {
+  $('faceLoad').style.display    = 'none';
+  $('faceCamWrap').style.display = 'block';
+  startLiveMatching();
+  fallTimer = setTimeout(() => {
+    if ($('verifyBtn').disabled) {
+      $('manualWarn').style.display = 'block';
+      $('manualVerifyBtn').style.display = 'flex';
+    }
+  }, 18000);
+}
+
+function getOpts() {
+  return window._useTiny
+    ? new faceapi.TinyFaceDetectorOptions({ inputSize:416, scoreThreshold:0.25 })
+    : new faceapi.SsdMobilenetv1Options({ minConfidence: 0.3 });
+}
+
+// ── ✅ LIVE MATCHING — runs every 300ms and shows real-time score ──────────────
+function startLiveMatching() {
+  const vid = $('faceVideo');
+
+  detectTimer = setInterval(async () => {
+    if (!vid.videoWidth || !modelsOK || verifying || autoVerified) return;
+
+    measureLight(vid);
+
+    try {
+      const frame = preprocessFrame(vid);
+      let det = await faceapi.detectSingleFace(frame, getOpts())
+        .withFaceLandmarks().withFaceDescriptor();
+      if (!det) {
+        det = await faceapi.detectSingleFace(vid, getOpts())
+          .withFaceLandmarks().withFaceDescriptor();
+      }
+
+      if (!det) {
+        $('faceOval').className = 'oval';
+        $('faceStatus').textContent = lux < 60
+          ? '🌙 Too dark — tap ☀️ or move to better light'
+          : '👤 Align your face in the oval';
+        $('scoreRingWrap').style.display = 'none';
+        $('verifyBtn').disabled = true;
+        return;
+      }
+
+      // ✅ Add to rolling buffer
+      liveDescBuffer.push(det.descriptor);
+      if (liveDescBuffer.length > 5) liveDescBuffer.shift();
+
+      // ✅ Average buffer for stability
+      const avgDesc = averageDescs(liveDescBuffer);
+      const distance = faceapi.euclideanDistance(storedDesc, avgDesc);
+      const matchPct = Math.max(0, Math.min(100, Math.round((1 - distance) * 130)));
+
+      // Update live score ring
+      $('scoreRingWrap').style.display = 'block';
+      const ring = $('scoreRing');
+      ring.textContent = matchPct + '%';
+
+      if (matchPct >= 70) {
+        ring.style.background = 'rgba(16,185,129,.85)';
+        ring.style.borderColor = '#10b981';
+        $('faceOval').className = 'oval match';
+        $('faceStatus').textContent = `✅ ${matchPct}% match — tap Verify or hold still to auto-verify`;
+        $('verifyBtn').disabled = false;
+        clearTimeout(fallTimer);
+        $('manualWarn').style.display = 'none';
+
+        // ✅ AUTO-VERIFY when confidence ≥ 85% for 3 consecutive frames
+        if (matchPct >= 85 && liveDescBuffer.length >= 3 && !autoVerified) {
+          const allHigh = liveDescBuffer.slice(-3).every(d => {
+            return (1 - faceapi.euclideanDistance(storedDesc, d)) * 130 >= 80;
+          });
+          if (allHigh) {
+            autoVerified = true;
+            await completeLogin(avgDesc, distance);
+          }
+        }
+      } else if (matchPct >= 45) {
+        ring.style.background = 'rgba(245,158,11,.85)';
+        ring.style.borderColor = '#f59e0b';
+        $('faceOval').className = 'oval scan';
+        $('faceStatus').textContent = `🔍 ${matchPct}% — scanning…`;
+        $('verifyBtn').disabled = false;
+      } else {
+        ring.style.background = 'rgba(239,68,68,.8)';
+        ring.style.borderColor = '#ef4444';
+        $('faceOval').className = 'oval nomatch';
+        $('faceStatus').textContent = `❌ ${matchPct}% — move closer or adjust lighting`;
+        $('verifyBtn').disabled = distance > 0.9;
+      }
+
+    } catch (e) {}
+  }, 300); // ✅ 300ms for fast real-time feel
+}
+
+// ── Manual verify button ──────────────────────────────────────────────────────
+async function doVerify() {
+  if (verifying || autoVerified) return;
+  verifying = true;
+  stopDetection();
+
+  $('verifyBtn').disabled = true;
+  $('verifyBtn').innerHTML = '<span class="spin"></span> Verifying…';
+
+  const vid  = $('faceVideo');
+
+  try {
+    // Take 2 frames and average
+    const descs = [];
+    for (let i = 0; i < 2; i++) {
+      const frame = preprocessFrame(vid);
+      const det   = await faceapi.detectSingleFace(frame, getOpts())
+        .withFaceLandmarks().withFaceDescriptor()
+        || await faceapi.detectSingleFace(vid, getOpts())
+        .withFaceLandmarks().withFaceDescriptor();
+      if (det) descs.push(det.descriptor);
+      await new Promise(r => setTimeout(r, 150));
+    }
+    // Also include buffer
+    if (liveDescBuffer.length) descs.push(...liveDescBuffer.slice(-2));
+
+    if (!descs.length) throw new Error('Face not detected. Ensure good lighting and try again.');
+
+    const avgDesc = averageDescs(descs);
+    await completeLogin(avgDesc, faceapi.euclideanDistance(storedDesc, avgDesc));
+  } catch (e) {
+    $('faceAlert').innerHTML = `<div class="msg err">❌ ${e.message}</div>`;
+    $('verifyBtn').disabled = false;
+    $('verifyBtn').innerHTML = '🔍 Verify Now';
+    verifying = false;
+    $('faceOval').className = 'oval nomatch';
+    setTimeout(() => { $('faceOval').className='oval'; startLiveMatching(); }, 1800);
+  }
+}
+
+async function manualVerify() {
+  verifying = true;
+  stopDetection();
+  $('manualVerifyBtn').disabled = true;
+  $('manualVerifyBtn').innerHTML = '<span class="spin"></span>';
+  const vid = $('faceVideo');
+
+  let descs = [...liveDescBuffer]; // Use whatever we have from buffer
+
+  if (modelsOK) {
+    for (const conf of [0.2, 0.12, 0.07]) {
+      const opts = window._useTiny
+        ? new faceapi.TinyFaceDetectorOptions({ inputSize:608, scoreThreshold:conf })
+        : new faceapi.SsdMobilenetv1Options({ minConfidence:conf });
+      const det = await faceapi.detectSingleFace(preprocessFrame(vid), opts)
+        .withFaceLandmarks().withFaceDescriptor()
+        || await faceapi.detectSingleFace(vid, opts)
+        .withFaceLandmarks().withFaceDescriptor();
+      if (det) { descs.push(det.descriptor); break; }
+    }
+  }
+
+  if (!descs.length) descs.push(new Float32Array(pixelFingerprint(vid)));
+
+  const avgDesc = averageDescs(descs);
+  await completeLogin(avgDesc, faceapi.euclideanDistance(storedDesc, avgDesc), true);
+}
+
+// ✅ Complete login: check threshold and create session
+async function completeLogin(desc, distance, lenient = false) {
+  const THRESHOLD = lenient ? 0.75 : 0.60;
+  const matchPct  = Math.max(0, Math.min(100, Math.round((1 - distance) * 130)));
+
+  if (distance > THRESHOLD) {
+    verifying = false; autoVerified = false;
+    const tip = lux < 90 ? ' Try better lighting or tap ☀️.' : ' Make sure your face is fully visible.';
+    throw new Error(
+      `Face match failed — ${matchPct}% confidence (need 40%+).${tip}`
+    );
+  }
+
+  // ✅ Show success overlay on camera
+  $('successOverlay').classList.remove('hidden');
+  $('faceStatus').textContent = `✅ ${matchPct}% match — Welcome!`;
+  $('scoreRing').textContent  = matchPct + '%';
+  $('scoreRing').style.background   = 'rgba(16,185,129,.9)';
+  $('scoreRing').style.borderColor  = '#10b981';
+  $('faceOval').className = 'oval match';
+
+  // Create server session
+  const res  = await fetch('/api/voter/session', {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({ voterId: voterInfo.voterId })
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error);
+
+  setTimeout(() => { stopAll(); window.location.href = '/vote'; }, 1600);
+}
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+function averageDescs(descs) {
+  const out = new Float32Array(128);
+  descs.forEach(d => { for (let i=0;i<128;i++) out[i]+=d[i]; });
+  for (let i=0;i<128;i++) out[i] /= descs.length;
+  return out;
+}
+
+function preprocessFrame(vid) {
+  const c = document.createElement('canvas');
+  c.width  = vid.videoWidth  || 640;
+  c.height = vid.videoHeight || 480;
+  const ctx = c.getContext('2d');
+  const bri = lux < 70 ? 2.0 : lux < 120 ? 1.6 : 1.3;
+  const con = lux < 70 ? 1.6 : 1.3;
+  ctx.filter = `brightness(${bri}) contrast(${con})`;
+  ctx.drawImage(vid, 0, 0);
+  return c;
+}
+
+function measureLight(vid) {
+  try {
+    const c = document.createElement('canvas');
+    c.width=80; c.height=60;
+    const ctx=c.getContext('2d'); ctx.drawImage(vid,0,0,80,60);
+    const px=ctx.getImageData(0,0,80,60).data;
+    let s=0;
+    for(let i=0;i<px.length;i+=16) s+=(px[i]+px[i+1]+px[i+2])/3;
+    lux = s/(px.length/16);
+    const chip=$('lightChip');
+    if(lux<50){chip.textContent='🌑 Very Dark';chip.style.background='rgba(120,53,15,.85)';if(!boost){boost=true;applyFilter();$('boostBtn').classList.add('on');}}
+    else if(lux<90){chip.textContent='🌙 Low Light';chip.style.background='rgba(100,50,0,.85)';}
+    else if(lux<160){chip.textContent='💡 OK';chip.style.background='rgba(0,0,0,.6)';}
+    else{chip.textContent='☀️ Good';chip.style.background='rgba(5,80,40,.85)';}
+  } catch(e){}
+}
+
+function pixelFingerprint(vid) {
+  const c=document.createElement('canvas'); c.width=64; c.height=64;
+  c.getContext('2d').drawImage(vid,0,0,64,64);
+  const px=c.getContext('2d').getImageData(0,0,64,64).data;
+  return Array.from({length:128},(_,i)=>{
+    const idx=((i/128)*(px.length/4))|0;
+    return(px[idx*4]+px[idx*4+1]+px[idx*4+2])/(255*3);
+  });
+}
+
+function stopDetection(){ clearInterval(detectTimer); detectTimer=null; }
+function stopAll(){
+  stopDetection(); clearTimeout(fallTimer); verifying=false; autoVerified=false;
+  if(stream){stream.getTracks().forEach(t=>t.stop()); stream=null;}
+}
+
+document.addEventListener('keydown', e => {
+  if(e.key==='Enter' && !$('idCard').classList.contains('hidden')) findVoter();
+});
+</script>
+</body>
+</html>

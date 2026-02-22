@@ -1,0 +1,302 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Cast Your Vote — VoteSecure</title>
+  <link rel="stylesheet" href="/css/style.css"/>
+</head>
+<body>
+
+<nav class="navbar">
+  <a href="/" class="navbar-brand"><span class="logo">🗳️</span> VoteSecure</a>
+  <div class="nav-right">
+    <span class="nav-user-name" id="navName">Loading...</span>
+    <span class="badge badge-primary" id="navVoterId">—</span>
+    <button class="btn btn-secondary btn-sm" onclick="logout()">Logout</button>
+  </div>
+</nav>
+
+<div class="vote-page">
+
+  <!-- Voter Welcome -->
+  <div style="background: linear-gradient(135deg, #1e1b4b, #4338ca); border-radius:14px; padding:22px 28px; color:white; margin-bottom:24px; display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:12px;">
+    <div>
+      <div style="font-size:13px; opacity:.7; margin-bottom:4px;">LOGGED IN AS</div>
+      <div style="font-size:1.2rem; font-weight:800;" id="welcomeName">Voter</div>
+      <div style="font-size:13px; opacity:.7;" id="welcomeId">Voter ID: —</div>
+    </div>
+    <div style="text-align:right;">
+      <div style="font-size:12px; opacity:.7;">🔒 Identity Verified</div>
+      <div style="font-size:11px; opacity:.6; margin-top:2px;">Face recognition complete</div>
+    </div>
+  </div>
+
+  <div id="pageAlert"></div>
+  <div id="electionsContainer">
+    <div class="empty-state"><span class="spinner spinner-dark"></span><p style="margin-top:16px;">Loading elections...</p></div>
+  </div>
+</div>
+
+<!-- Confirm Vote Modal -->
+<div id="confirmModal" class="modal-overlay hidden">
+  <div class="modal" style="max-width:440px;">
+    <div class="modal-header">
+      <h3>Confirm Your Vote</h3>
+      <button class="modal-close" onclick="closeConfirm()">✕</button>
+    </div>
+    <div style="text-align:center; padding:10px 0 20px;">
+      <div style="font-size:3.5rem; margin-bottom:12px;" id="confirmSymbol">🌟</div>
+      <h2 id="confirmName" style="margin-bottom:4px;">Candidate Name</h2>
+      <p id="confirmParty" style="color:var(--muted); font-size:14px;">Party Name</p>
+      <div class="alert alert-warning" style="text-align:left; margin-top:20px; font-size:13px;">
+        ⚠️ <strong>This action cannot be undone.</strong> Once you confirm, your vote is final and cannot be changed.
+      </div>
+    </div>
+    <div id="modalAlert"></div>
+    <div style="display:flex; gap:10px;">
+      <button class="btn btn-secondary flex-1" onclick="closeConfirm()">Cancel</button>
+      <button class="btn btn-success flex-1" id="confirmBtn" onclick="submitVote()">✅ Confirm My Vote</button>
+    </div>
+  </div>
+</div>
+
+<!-- Thank You Modal -->
+<div id="thankYouModal" class="modal-overlay hidden">
+  <div class="modal" style="max-width:420px; text-align:center;">
+    <div style="font-size:4rem; margin-bottom:16px;">🎉</div>
+    <h2 style="margin-bottom:8px;">Thank You for Voting!</h2>
+    <p style="color:var(--muted); margin-bottom:20px; font-size:15px;">Your vote has been securely recorded. Every vote counts!</p>
+    <div class="voter-id-card" style="margin-bottom:20px; padding:16px 24px;">
+      <div style="font-size:13px; opacity:.7;">Vote cast for</div>
+      <div style="font-size:1.4rem; font-weight:900; margin-top:4px;" id="thankYouCandidate">—</div>
+    </div>
+    <button class="btn btn-secondary" onclick="document.getElementById('thankYouModal').classList.add('hidden')">Close</button>
+  </div>
+</div>
+
+<script>
+let currentVoter = null;
+let selectedCandidateId = null;
+let selectedElectionId = null;
+let elections = [];
+
+async function init() {
+  const res = await fetch('/api/voter/me');
+  const data = await res.json();
+  if (!data.voter) return window.location.href = '/voter-login';
+  currentVoter = data.voter;
+  document.getElementById('navName').textContent = currentVoter.name;
+  document.getElementById('navVoterId').textContent = currentVoter.voterId;
+  document.getElementById('welcomeName').textContent = currentVoter.name;
+  document.getElementById('welcomeId').textContent = 'Voter ID: ' + currentVoter.voterId;
+  loadElections();
+}
+
+async function logout() {
+  await fetch('/api/voter/logout', { method: 'POST' });
+  window.location.href = '/';
+}
+
+async function loadElections() {
+  const res = await fetch('/api/voter/elections');
+  elections = await res.json();
+  renderElections();
+}
+
+function renderElections() {
+  const container = document.getElementById('electionsContainer');
+  if (!elections.length) {
+    container.innerHTML = '<div class="empty-state"><span class="emoji">🗳️</span><h3>No Elections Available</h3><p>Check back later.</p></div>';
+    return;
+  }
+
+  container.innerHTML = elections.map(e => {
+    const end   = new Date(e.endDate).toLocaleDateString('en-IN', { day:'numeric', month:'long', year:'numeric' });
+    const total = e.totalVotes;
+
+    // ── Age limit label helper ──
+    const minAge = e.minAge || 0;
+    const maxAge = e.maxAge || 0;
+    const hasAgeLimit = minAge > 0 || maxAge > 0;
+    const ageLimitLabel = minAge > 0 && maxAge > 0
+      ? `Age ${minAge}–${maxAge} yrs`
+      : minAge > 0 ? `${minAge}+ years` : `≤${maxAge} years`;
+
+    // ── Check if voter is age-eligible (client-side hint only; server enforces) ──
+    let voterAge = null;
+    let ageEligible = true;
+    if (hasAgeLimit && currentVoter.dob) {
+      const dob  = new Date(currentVoter.dob);
+      const now  = new Date();
+      voterAge   = now.getFullYear() - dob.getFullYear();
+      const m    = now.getMonth() - dob.getMonth();
+      if (m < 0 || (m === 0 && now.getDate() < dob.getDate())) voterAge--;
+      if (minAge > 0 && voterAge < minAge) ageEligible = false;
+      if (maxAge > 0 && voterAge > maxAge) ageEligible = false;
+    }
+
+    if (e.userVoted) {
+      const votedCandidate = e.candidates.find(c => c.id === e.userVotedFor);
+      return `
+        <div class="card" style="margin-bottom:24px;">
+          <div class="election-header" style="margin:-24px -24px 20px; border-radius:14px 14px 0 0;">
+            <div style="display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:10px;">
+              <div>
+                <span class="badge" style="background:rgba(255,255,255,.2); color:white; margin-bottom:8px;">✅ VOTED</span>
+                ${hasAgeLimit ? `<span class="badge" style="background:rgba(255,255,255,.15); color:white; margin-bottom:8px; margin-left:6px;">🎂 ${ageLimitLabel}</span>` : ''}
+                <h2>${e.title}</h2>
+                <p>${e.description || ''}</p>
+              </div>
+            </div>
+            <div class="election-meta-row">
+              <span>🗳️ ${total} total votes</span>
+              <span>📅 Closes ${end}</span>
+            </div>
+          </div>
+          <div class="alert alert-success" style="margin-bottom:16px;">
+            ✅ You voted for <strong>${votedCandidate?.symbol} ${votedCandidate?.name}</strong>
+          </div>
+          <h4 style="margin-bottom:14px; color:var(--muted); font-size:13px; text-transform:uppercase; letter-spacing:.04em;">Live Results</h4>
+          ${e.candidates.map((c, i) => {
+            const pct = total ? Math.round((c.votes/total)*100) : 0;
+            const isWinner = i === 0 && e.candidates.every((x,j) => j === 0 || x.votes <= c.votes);
+            return `
+            <div class="result-bar">
+              <div class="result-bar-header">
+                <span class="result-bar-name">
+                  ${c.symbol} ${c.name}
+                  ${isWinner && total > 0 ? '<span class="winner-badge">🏆 Leading</span>' : ''}
+                  ${c.id === e.userVotedFor ? '<span class="badge badge-primary" style="font-size:11px;">Your Vote</span>' : ''}
+                </span>
+                <span class="result-bar-info">${c.votes} votes · ${pct}%</span>
+              </div>
+              <div class="result-bar-track">
+                <div class="result-bar-fill" style="width:${pct}%; background:${c.color};"></div>
+              </div>
+            </div>`;
+          }).join('')}
+        </div>`;
+    }
+
+    // ── Age restricted — cannot vote ──
+    if (hasAgeLimit && !ageEligible) {
+      const reason = minAge > 0 && voterAge < minAge
+        ? `This election requires voters to be at least <strong>${minAge} years old</strong>. Your age: <strong>${voterAge}</strong>.`
+        : `This election is for voters aged <strong>${maxAge} or younger</strong>. Your age: <strong>${voterAge}</strong>.`;
+      return `
+        <div class="card" style="margin-bottom:24px; border:2px solid #fecaca;">
+          <div class="election-header" style="margin:-24px -24px 20px; border-radius:14px 14px 0 0; background:linear-gradient(135deg,#7f1d1d,#dc2626);">
+            <span class="badge" style="background:rgba(255,255,255,.2); color:white; margin-bottom:8px;">🚫 AGE RESTRICTED</span>
+            <span class="badge" style="background:rgba(255,255,255,.15); color:white; margin-bottom:8px; margin-left:6px;">🎂 ${ageLimitLabel}</span>
+            <h2>${e.title}</h2>
+            <p>${e.description || ''}</p>
+            <div class="election-meta-row">
+              <span>👥 ${e.candidates.length} candidates</span>
+              <span>📅 Closes ${end}</span>
+            </div>
+          </div>
+          <div style="text-align:center; padding:20px 10px;">
+            <div style="font-size:3rem; margin-bottom:12px;">🚫</div>
+            <h3 style="color:#b91c1c; margin-bottom:8px;">Not Eligible to Vote</h3>
+            <p style="font-size:14px; color:#64748b; margin-bottom:14px;">${reason}</p>
+            <div style="background:#fef2f2; border:1px solid #fecaca; border-radius:10px; padding:12px 16px; font-size:13px; color:#7f1d1d; display:inline-block;">
+              🎂 Age requirement: <strong>${ageLimitLabel}</strong> &nbsp;|&nbsp; Your age: <strong>${voterAge} yrs</strong>
+            </div>
+          </div>
+        </div>`;
+    }
+
+    // ── Normal eligible election ──
+    return `
+      <div class="card" style="margin-bottom:24px;">
+        <div class="election-header" style="margin:-24px -24px 20px; border-radius:14px 14px 0 0;">
+          <span class="badge" style="background:rgba(255,255,255,.2); color:white; margin-bottom:8px;">🟢 ACTIVE</span>
+          ${hasAgeLimit ? `<span class="badge" style="background:rgba(255,255,255,.15); color:white; margin-bottom:8px; margin-left:6px;">🎂 ${ageLimitLabel}</span>` : ''}
+          <h2>${e.title}</h2>
+          <p>${e.description || ''}</p>
+          <div class="election-meta-row">
+            <span>👥 ${e.candidates.length} candidates</span>
+            <span>🗳️ ${total} votes cast</span>
+            <span>📅 Closes ${end}</span>
+          </div>
+        </div>
+        <h4 style="margin-bottom:16px; color:var(--muted); font-size:13px; text-transform:uppercase; letter-spacing:.04em;">Select a Candidate</h4>
+        <div class="candidates-grid" id="cand-${e.id}">
+          ${e.candidates.map(c => `
+            <div class="candidate-card" onclick="selectCandidate('${e.id}','${c.id}','${c.symbol}','${c.name}','${c.party}', this)">
+              <div class="selected-check">✓</div>
+              <div class="candidate-symbol">${c.symbol}</div>
+              <div class="candidate-name">${c.name}</div>
+              <div class="candidate-party">${c.party}</div>
+            </div>`).join('')}
+        </div>
+        <button class="btn btn-primary btn-block btn-lg" id="voteBtn-${e.id}" disabled
+          onclick="openConfirmModal('${e.id}')">
+          🗳️ Cast My Vote
+        </button>
+      </div>`;
+  }).join('');
+}
+
+function selectCandidate(electionId, candidateId, symbol, name, party, el) {
+  // Deselect others in this election
+  document.querySelectorAll(`#cand-${electionId} .candidate-card`).forEach(c => c.classList.remove('selected'));
+  el.classList.add('selected');
+  selectedCandidateId = candidateId;
+  selectedElectionId = electionId;
+  document.getElementById(`voteBtn-${electionId}`).disabled = false;
+}
+
+function openConfirmModal(electionId) {
+  const election = elections.find(e => e.id === electionId);
+  const candidate = election?.candidates.find(c => c.id === selectedCandidateId);
+  if (!candidate) return;
+
+  document.getElementById('confirmSymbol').textContent = candidate.symbol;
+  document.getElementById('confirmName').textContent = candidate.name;
+  document.getElementById('confirmParty').textContent = candidate.party;
+  document.getElementById('modalAlert').innerHTML = '';
+  document.getElementById('confirmBtn').disabled = false;
+  document.getElementById('confirmBtn').innerHTML = '✅ Confirm My Vote';
+  document.getElementById('confirmModal').classList.remove('hidden');
+}
+
+function closeConfirm() {
+  document.getElementById('confirmModal').classList.add('hidden');
+}
+
+async function submitVote() {
+  const btn = document.getElementById('confirmBtn');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner"></span> Submitting...';
+
+  try {
+    const res = await fetch('/api/voter/vote', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ electionId: selectedElectionId, candidateId: selectedCandidateId })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error);
+
+    const election = elections.find(e => e.id === selectedElectionId);
+    const candidate = election?.candidates.find(c => c.id === selectedCandidateId);
+
+    closeConfirm();
+    document.getElementById('thankYouCandidate').textContent = `${candidate?.symbol} ${candidate?.name}`;
+    document.getElementById('thankYouModal').classList.remove('hidden');
+
+    // Reload elections to show results
+    await loadElections();
+  } catch (e) {
+    document.getElementById('modalAlert').innerHTML = `<div class="alert alert-danger">❌ ${e.message}</div>`;
+    btn.disabled = false;
+    btn.innerHTML = '✅ Confirm My Vote';
+  }
+}
+
+init();
+</script>
+</body>
+</html>

@@ -1,0 +1,1233 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"/>
+  <title>Voter Registration — VoteSecure</title>
+  <link rel="stylesheet" href="/css/style.css"/>
+  <style>
+    *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+    body{background:#0f172a;min-height:100vh;}
+    .page{max-width:520px;margin:0 auto;padding:14px 14px 60px;}
+
+    /* Steps */
+    .steps{display:flex;background:rgba(255,255,255,.07);border-radius:12px;padding:4px;margin-bottom:14px;}
+    .sp{flex:1;padding:8px 2px;text-align:center;border-radius:9px;font-size:10px;font-weight:700;color:rgba(255,255,255,.3);transition:all .25s;}
+    .sp.active{background:white;color:#4f46e5;}
+    .sp.done{color:rgba(255,255,255,.55);}
+
+    /* Card */
+    .card{background:white;border-radius:20px;padding:22px;margin-bottom:12px;}
+    .card-title{font-size:1.1rem;font-weight:800;margin:0 0 3px;}
+    .card-sub{color:#64748b;font-size:13px;margin:0 0 18px;}
+
+    /* Form */
+    .lbl{font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.06em;color:#64748b;display:block;margin-bottom:5px;}
+    .inp{width:100%;padding:12px 14px;border:2px solid #e2e8f0;border-radius:10px;font-size:15px;outline:none;transition:border-color .2s;background:white;}
+    .inp:focus{border-color:#4f46e5;box-shadow:0 0 0 3px rgba(79,70,229,.1);}
+    .fg{margin-bottom:14px;}
+
+    /* Buttons */
+    .btn-main{width:100%;height:52px;border-radius:14px;border:none;font-size:15px;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;touch-action:manipulation;text-decoration:none;transition:all .15s;}
+    .btn-main.blue{background:#4f46e5;color:white;}
+    .btn-main.blue:hover:not(:disabled){background:#3730a3;}
+    .btn-main.blue:disabled{background:#a5b4fc;cursor:not-allowed;}
+    .btn-main.green{background:#059669;color:white;}
+    .btn-main.grey{background:#f1f5f9;color:#0f172a;font-size:14px;}
+    .btn-row{display:flex;gap:10px;margin-top:8px;}
+
+    /* Alerts */
+    .alert{padding:11px 14px;border-radius:10px;font-size:13px;font-weight:600;margin-bottom:10px;}
+    .alert.err{background:#fee2e2;color:#b91c1c;border:1px solid #fecaca;}
+    .alert.ok {background:#dcfce7;color:#15803d;border:1px solid #bbf7d0;}
+    .alert.warn{background:#fef3c7;color:#a16207;border:1px solid #fde68a;}
+    .alert.info{background:#e0e7ff;color:#4338ca;border:1px solid #c7d2fe;}
+
+    /* OTP Boxes */
+    .otp-row{display:flex;gap:8px;justify-content:center;margin:14px 0;}
+    .otp-d{width:46px;height:54px;border:2px solid #e2e8f0;border-radius:10px;font-size:1.4rem;font-weight:900;text-align:center;outline:none;transition:all .2s;}
+    .otp-d:focus{border-color:#4f46e5;box-shadow:0 0 0 3px rgba(79,70,229,.12);}
+    .otp-d.ok{border-color:#10b981;background:#f0fdf4;}
+
+    /* Proof cards */
+    .proof-row{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:14px;}
+    .proof-card{border:2px solid #e2e8f0;border-radius:14px;padding:16px 10px;text-align:center;cursor:pointer;transition:all .2s;}
+    .proof-card:hover{border-color:#a5b4fc;background:#f5f3ff;}
+    .proof-card.sel{border-color:#4f46e5;background:#eef2ff;}
+    .proof-card .icon{font-size:2.2rem;margin-bottom:8px;}
+    .proof-card .name{font-weight:800;font-size:13px;}
+    .proof-card .desc{font-size:11px;color:#64748b;margin-top:3px;}
+
+    /* Doc camera */
+    .doc-cam{position:relative;background:#000;border-radius:16px;overflow:hidden;width:100%;aspect-ratio:16/10;margin-bottom:8px;}
+    .doc-cam video{width:100%;height:100%;object-fit:cover;display:block;}
+    .doc-frame{position:absolute;top:8%;left:5%;right:5%;bottom:8%;border:3px dashed rgba(255,255,255,.7);border-radius:10px;pointer-events:none;}
+    .doc-frame.scan{border-color:#f59e0b;border-style:solid;animation:blink .8s infinite;}
+    .doc-frame.good{border-color:#10b981;border-style:solid;}
+    @keyframes blink{0%,100%{opacity:1;}50%{opacity:.3;}}
+    .cam-bar{position:absolute;bottom:0;left:0;right:0;background:rgba(0,0,0,.8);color:white;padding:8px 12px;text-align:center;font-size:12px;font-weight:600;}
+    .cam-top{position:absolute;top:0;left:0;right:0;padding:8px 12px;display:flex;justify-content:space-between;align-items:center;background:linear-gradient(to bottom,rgba(0,0,0,.7),transparent);}
+    .lx{padding:3px 9px;border-radius:99px;font-size:10px;font-weight:700;color:white;background:rgba(0,0,0,.5);}
+    .icn{width:32px;height:32px;background:rgba(255,255,255,.15);border:none;border-radius:50%;color:white;font-size:14px;cursor:pointer;display:flex;align-items:center;justify-content:center;}
+    .icn.on{background:rgba(79,70,229,.75);}
+
+    /* Face camera */
+    .face-cam{position:relative;background:#000;border-radius:18px;overflow:hidden;width:100%;aspect-ratio:3/4;max-height:360px;}
+    .face-cam video{width:100%;height:100%;object-fit:cover;display:block;}
+    .oval-wrap{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none;}
+    .oval{width:54%;height:74%;border-radius:50%;border:3px solid rgba(255,255,255,.5);box-shadow:0 0 0 9999px rgba(0,0,0,.46);transition:all .25s;}
+    .oval.rdy{border-color:#10b981;box-shadow:0 0 0 9999px rgba(0,0,0,.4),0 0 20px rgba(16,185,129,.5);}
+    .oval.bad{border-color:#ef4444;}
+    .face-btm{position:absolute;bottom:0;left:0;right:0;padding:11px;background:linear-gradient(to top,rgba(0,0,0,.8),transparent);}
+    .face-txt{color:white;font-size:12px;font-weight:600;text-align:center;margin-bottom:7px;}
+    .dots{display:flex;gap:8px;justify-content:center;}
+    .dot{width:11px;height:11px;border-radius:50%;background:rgba(255,255,255,.3);transition:all .3s;}
+    .dot.f{background:#10b981;transform:scale(1.2);}
+    .dot.a{background:#f59e0b;animation:pd .6s infinite;}
+    @keyframes pd{0%,100%{transform:scale(1);}50%{transform:scale(1.3);}}
+
+    /* Progress */
+    .prog{background:#f1f5f9;border-radius:99px;height:5px;overflow:hidden;max-width:260px;margin:8px auto 0;}
+    .prog-f{height:100%;background:#4f46e5;border-radius:99px;transition:width .4s;}
+
+    /* Spinner */
+    @keyframes spin{to{transform:rotate(360deg);}}
+    .spin{width:17px;height:17px;border:2px solid rgba(255,255,255,.3);border-top-color:white;border-radius:50%;animation:spin .6s linear infinite;flex-shrink:0;}
+    .spin-b{width:15px;height:15px;border:2px solid rgba(79,70,229,.2);border-top-color:#4f46e5;border-radius:50%;animation:spin .6s linear infinite;}
+
+    /* ID card */
+    .voter-card{background:linear-gradient(135deg,#1e1b4b,#4338ca);border-radius:18px;padding:26px;color:white;text-align:center;max-width:300px;margin:0 auto 16px;}
+    .voter-id{font-size:1.8rem;font-weight:900;letter-spacing:.13em;font-family:monospace;margin:8px 0;}
+
+    /* Preview canvas */
+    .prev{position:relative;border-radius:14px;overflow:hidden;margin-bottom:10px;}
+    .prev canvas{width:100%;display:block;}
+    .prev-badge{position:absolute;top:10px;right:10px;background:rgba(16,185,129,.9);color:white;border-radius:8px;padding:4px 10px;font-size:11px;font-weight:700;}
+
+    /* OCR result */
+    .ocr-box{border-radius:12px;padding:14px;margin:10px 0;}
+    .ocr-box.ok  {background:#dcfce7;border:2px solid #10b981;}
+    .ocr-box.fail{background:#fee2e2;border:2px solid #ef4444;}
+    .ocr-row{display:flex;align-items:center;gap:10px;margin-bottom:6px;}
+    .ocr-row:last-child{margin:0;}
+    .ocr-k{font-size:11px;font-weight:700;text-transform:uppercase;color:#64748b;min-width:50px;}
+    .ocr-v{font-size:14px;font-weight:800;color:#0f172a;flex:1;}
+    .tag{font-size:10px;font-weight:700;padding:2px 8px;border-radius:99px;}
+    .tag.ok  {background:#dcfce7;color:#15803d;}
+    .tag.fail{background:#fee2e2;color:#b91c1c;}
+
+    @media(max-width:400px){.proof-row{grid-template-columns:1fr;} .otp-d{width:38px;height:48px;font-size:1.2rem;}}
+  </style>
+</head>
+<body>
+
+<nav style="background:rgba(255,255,255,.05);backdrop-filter:blur(12px);border-bottom:1px solid rgba(255,255,255,.1);padding:0 18px;height:56px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:100;">
+  <a href="/" style="color:white;font-weight:800;font-size:1.05rem;text-decoration:none;">🗳️ VoteSecure</a>
+  <a href="/voter-login" style="color:rgba(255,255,255,.6);font-size:12px;text-decoration:none;">Already registered? →</a>
+</nav>
+
+<div class="page">
+  <!-- Step indicator -->
+  <div class="steps" style="margin-top:14px;">
+    <div class="sp" id="sp1">1·Info</div>
+    <div class="sp" id="sp2">2·OTP</div>
+    <div class="sp" id="sp3">3·ID Proof</div>
+    <div class="sp" id="sp4">4·Face</div>
+    <div class="sp" id="sp5">5·Done</div>
+  </div>
+
+  <!-- ── STEP 1: Personal Info ─────────────────────────────── -->
+  <div id="step1" style="display:none;">
+    <div class="card">
+      <p class="card-title">📋 Personal Information</p>
+      <p class="card-sub">Fields marked * are required</p>
+      <div id="err1" style="margin-bottom:10px;"></div>
+      <div class="fg">
+        <label class="lbl">Full Name *</label>
+        <input id="fName" class="inp" type="text" placeholder="As it appears on your Aadhaar / College ID" autocomplete="name"/>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+        <div class="fg">
+          <label class="lbl">Date of Birth *</label>
+          <input id="fDob" class="inp" type="date"/>
+        </div>
+        <div class="fg">
+          <label class="lbl">Phone Number *</label>
+          <input id="fPhone" class="inp" type="tel" placeholder="10-digit mobile" inputmode="tel" autocomplete="tel"/>
+        </div>
+      </div>
+      <div class="fg" style="margin-bottom:18px;">
+        <label class="lbl">Address</label>
+        <textarea id="fAddress" class="inp" rows="2" placeholder="Residential address" style="resize:none;"></textarea>
+      </div>
+      <button class="btn-main blue" id="btn1" onclick="step1Next()">Continue → OTP Verification</button>
+    </div>
+  </div>
+
+  <!-- ── STEP 2: Phone OTP ─────────────────────────────────── -->
+  <div id="step2" style="display:none;">
+    <div class="card">
+      <p class="card-title">📱 Phone Verification</p>
+      <p class="card-sub">Verify your mobile number with a one-time OTP</p>
+      <div id="err2" style="margin-bottom:10px;"></div>
+      <div class="alert info" style="font-size:12px;margin-bottom:12px;">
+        ℹ️ <strong>Demo Mode:</strong> OTP will be shown on screen. In production, it is sent via SMS.
+      </div>
+
+      <!-- Phone display + Send -->
+      <div id="otpSendWrap">
+        <div style="background:#f8fafc;border-radius:12px;padding:14px;margin-bottom:14px;display:flex;align-items:center;gap:12px;">
+          <span style="font-size:1.8rem;">📱</span>
+          <div>
+            <div style="font-size:11px;color:#64748b;font-weight:700;text-transform:uppercase;">Sending OTP to</div>
+            <div id="phoneDisplay" style="font-weight:800;font-size:1rem;font-family:monospace;color:#0f172a;"></div>
+          </div>
+        </div>
+        <button class="btn-main blue" id="btnSendOtp" onclick="sendOtp()">📤 Send OTP</button>
+      </div>
+
+      <!-- OTP entry -->
+      <div id="otpEntryWrap" style="display:none;">
+        <p style="text-align:center;font-size:13px;color:#64748b;margin-bottom:2px;">Enter the 6-digit OTP</p>
+        <div id="otpHint" style="display:none;text-align:center;background:#fef3c7;border-radius:8px;padding:7px 14px;font-size:14px;font-weight:800;color:#92400e;margin-bottom:4px;"></div>
+        <div class="otp-row" id="otpRow"></div>
+        <p id="otpCountdown" style="text-align:center;font-size:12px;color:#64748b;margin-bottom:12px;"></p>
+        <button class="btn-main blue" id="btnVerifyOtp" onclick="verifyOtp()" disabled>✅ Verify OTP</button>
+        <button class="btn-main grey" onclick="resetOtp()" style="margin-top:8px;">🔄 Resend OTP</button>
+      </div>
+
+      <button class="btn-main grey" onclick="goToStep(1)" style="margin-top:8px;">← Back</button>
+    </div>
+  </div>
+
+  <!-- ── STEP 3: ID Proof ──────────────────────────────────── -->
+  <div id="step3" style="display:none;">
+
+    <!-- 3a: Choose document type -->
+    <div id="step3a" class="card">
+      <p class="card-title">🪪 Age & Identity Proof</p>
+      <p class="card-sub">Select your ID to verify name and date of birth</p>
+      <div id="err3a" style="margin-bottom:10px;"></div>
+
+      <div class="proof-row">
+        <div class="proof-card" id="pc-aadhaar" onclick="pickProof('aadhaar')">
+          <div class="icon">🪪</div>
+          <div class="name">Aadhaar Card</div>
+          <div class="desc">Government issued<br/>✅ Recommended</div>
+        </div>
+        <div class="proof-card" id="pc-college" onclick="pickProof('college')">
+          <div class="icon">🎓</div>
+          <div class="name">College ID</div>
+          <div class="desc">Student ID with<br/>Name &amp; DOB</div>
+        </div>
+      </div>
+
+      <div id="proofTip" style="display:none;margin-bottom:14px;"></div>
+
+      <button class="btn-main blue" id="btnGoScan" onclick="startDocScan()" disabled>
+        Continue → Scan Document
+      </button>
+      <button class="btn-main grey" onclick="goToStep(2)" style="margin-top:8px;">← Back</button>
+    </div>
+
+    <!-- 3b: Camera scan -->
+    <div id="step3b" style="display:none;">
+      <div class="card">
+        <p class="card-title" id="scanTitle">📷 Scan Document</p>
+        <p class="card-sub">Hold document flat inside the white frame</p>
+        <div id="err3b" style="margin-bottom:8px;"></div>
+
+        <!-- Loading -->
+        <div id="docLoadWrap" style="text-align:center;padding:20px 0;">
+          <div class="spin-b" style="margin:0 auto 10px;"></div>
+          <p id="docLoadTxt" style="font-size:13px;color:#64748b;font-weight:600;">Starting camera…</p>
+        </div>
+
+        <!-- Camera -->
+        <div id="docCamWrap" style="display:none;">
+          <div class="doc-cam">
+            <video id="docVid" autoplay muted playsinline></video>
+            <div class="cam-top">
+              <span class="lx" id="docLx">💡—</span>
+              <div style="display:flex;gap:7px;">
+                <button class="icn" onclick="flipDocCam()">🔄</button>
+                <button class="icn" id="docBoostBtn" onclick="toggleDocBoost()">☀️</button>
+              </div>
+            </div>
+            <div class="doc-frame" id="docFrame"></div>
+            <div class="cam-bar" id="docCamBar">📄 Place document flat — all 4 corners inside the frame</div>
+          </div>
+          <p style="text-align:center;font-size:11px;color:rgba(255,255,255,.4);margin:6px 0 10px;">
+            Flat · All corners visible · No glare · Good lighting
+          </p>
+          <div id="docTipBox" style="margin-bottom:10px;"></div>
+          <div class="btn-row">
+            <button class="btn-main grey" style="max-width:70px;" onclick="stopDocCam();showStep3a()">← Back</button>
+            <button class="btn-main blue" id="btnCapture" onclick="captureDocument()">📸 Capture</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 3c: OCR result -->
+    <div id="step3c" style="display:none;">
+      <div class="card">
+        <p class="card-title">🔍 Document Verification</p>
+        <div id="err3c" style="margin-bottom:10px;"></div>
+        <canvas id="docCanvas" style="width:100%;border-radius:12px;display:block;margin-bottom:12px;"></canvas>
+
+        <div id="ocrProgress" style="text-align:center;padding:12px 0;">
+          <div style="display:flex;align-items:center;justify-content:center;gap:10px;margin-bottom:8px;">
+            <div class="spin-b"></div>
+            <span id="ocrTxt" style="font-size:13px;font-weight:700;color:#4f46e5;">Reading document…</span>
+          </div>
+          <div class="prog" style="max-width:200px;">
+            <div class="prog-f" id="ocrBar" style="width:5%;"></div>
+          </div>
+        </div>
+
+        <div id="ocrResult" style="display:none;"></div>
+
+        <div id="ocrActions" style="display:none;margin-top:12px;">
+          <button class="btn-main green" id="btnAcceptProof" onclick="acceptProof()" style="display:none;">✅ Verified — Continue to Face Scan</button>
+          <button class="btn-main grey" onclick="retryDocScan()" style="margin-top:8px;">🔄 Retake Photo</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── STEP 4: Face Capture ──────────────────────────────── -->
+  <div id="step4" style="display:none;">
+
+    <!-- Loading AI -->
+    <div id="step4a" class="card" style="text-align:center;padding:30px 20px;">
+      <div style="font-size:3rem;margin-bottom:12px;">🤖</div>
+      <p id="aiLoadTxt" style="font-weight:700;font-size:14px;margin-bottom:10px;">Loading AI…</p>
+      <div class="prog"><div class="prog-f" id="aiLoadBar" style="width:5%;"></div></div>
+    </div>
+
+    <!-- Camera -->
+    <div id="step4b" style="display:none;">
+      <div class="face-cam" id="faceCamEl">
+        <video id="faceVid" autoplay muted playsinline></video>
+        <div class="cam-top">
+          <span class="lx" id="faceLx">💡—</span>
+          <div style="display:flex;gap:7px;">
+            <button class="icn" onclick="flipFaceCam()">🔄</button>
+            <button class="icn" id="faceBoostBtn" onclick="toggleFaceBoost()">☀️</button>
+          </div>
+        </div>
+        <div class="oval-wrap"><div class="oval" id="faceOval"></div></div>
+        <div class="face-btm">
+          <div class="face-txt" id="faceTxt">👤 Align your face inside the oval</div>
+          <div class="dots" id="faceDots" style="display:none;">
+            <div class="dot" id="d0"></div>
+            <div class="dot" id="d1"></div>
+            <div class="dot" id="d2"></div>
+          </div>
+        </div>
+      </div>
+      <p style="text-align:center;font-size:11px;color:rgba(255,255,255,.4);margin:6px 0 10px;">
+        🔄 flip &nbsp;·&nbsp; ☀️ boost light &nbsp;·&nbsp; Hold still — 3 frames captured
+      </p>
+      <div id="err4" style="margin-bottom:8px;"></div>
+      <div class="btn-row">
+        <button class="btn-main grey" style="max-width:70px;" onclick="stopFaceCam();goToStep(3)">← Back</button>
+        <button class="btn-main blue" id="btnCapFace" onclick="captureFace()" disabled>📸 Start Face Scan</button>
+      </div>
+      <button class="btn-main grey" id="btnManualFace" onclick="manualFaceCap()" style="margin-top:8px;display:none;font-size:13px;">📷 Manual Capture</button>
+    </div>
+
+    <!-- Preview -->
+    <div id="step4c" style="display:none;">
+      <div class="prev">
+        <canvas id="faceCanvas"></canvas>
+        <div class="prev-badge">✅ 3 frames captured</div>
+      </div>
+      <div class="alert ok" style="margin-bottom:10px;">🎯 Face captured & averaged from 3 frames</div>
+      <div class="btn-row">
+        <button class="btn-main grey" style="max-width:110px;" onclick="retakeFace()">🔄 Retake</button>
+        <button class="btn-main green" id="btnRegister" onclick="doRegister()">✅ Complete Registration</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── STEP 5: Done ──────────────────────────────────────── -->
+  <div id="step5" style="display:none;">
+    <div id="step5content"></div>
+  </div>
+
+</div><!-- /page -->
+
+<!-- Load heavy scripts AFTER HTML so page renders fast -->
+<script>
+// ══════════════════════════════════════════════════════════════
+// GLOBAL STATE
+// ══════════════════════════════════════════════════════════════
+var reg     = {};          // collected registration data
+var proofType   = null;   // 'aadhaar' | 'college'
+var proofOK     = false;
+var finalDesc   = null;   // Float32Array face descriptor
+var faceDescs   = [];
+var faceCapturing = false;
+var faceStream  = null;
+var faceDetectInterval = null;
+var faceModelsLoaded = false;
+var facingMode  = 'user';
+var faceBoost   = false;
+var faceLux     = 150;
+var docStream   = null;
+var docFacing   = 'environment';
+var docBoost    = false;
+var docLux      = 150;
+var docLightInterval = null;
+var otpCountdownInterval = null;
+
+var CDN1 = 'https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/weights';
+var CDN2 = 'https://raw.githubusercontent.com/justadudewhohacks/face-api.js/master/weights';
+
+// ══════════════════════════════════════════════════════════════
+// STEP NAVIGATION
+// ══════════════════════════════════════════════════════════════
+function goToStep(n) {
+  for (var i = 1; i <= 5; i++) {
+    var el = document.getElementById('step' + i);
+    if (el) el.style.display = (i === n) ? 'block' : 'none';
+  }
+  var labels = ['sp1','sp2','sp3','sp4','sp5'];
+  for (var j = 0; j < labels.length; j++) {
+    var pill = document.getElementById(labels[j]);
+    if (!pill) continue;
+    pill.className = 'sp' + (j+1 < n ? ' done' : j+1 === n ? ' active' : '');
+  }
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+function showAlert(id, type, msg) {
+  var el = document.getElementById(id);
+  if (!el) return;
+  el.innerHTML = msg ? '<div class="alert ' + type + '">' + msg + '</div>' : '';
+}
+
+// ══════════════════════════════════════════════════════════════
+// STEP 1 — Personal Info
+// ══════════════════════════════════════════════════════════════
+function step1Next() {
+  var name  = document.getElementById('fName').value.trim();
+  var dob   = document.getElementById('fDob').value;
+  var phone = document.getElementById('fPhone').value.trim();
+
+  if (!name)  return showAlert('err1','err','⚠️ Full name is required.');
+  if (!dob)   return showAlert('err1','err','⚠️ Date of birth is required.');
+  if (phone.replace(/\D/g,'').length < 10)
+    return showAlert('err1','err','⚠️ Enter a valid 10-digit mobile number.');
+
+  var age = Math.floor((Date.now() - new Date(dob)) / (365.25*24*60*60*1000));
+  if (age < 18) return showAlert('err1','err','⚠️ You must be at least 18 years old to register.');
+
+  reg.name    = name;
+  reg.dob     = dob;
+  reg.phone   = phone;
+  reg.address = document.getElementById('fAddress').value.trim();
+
+  showAlert('err1','','');
+  document.getElementById('phoneDisplay').textContent = phone;
+  goToStep(2);
+}
+
+// ══════════════════════════════════════════════════════════════
+// STEP 2 — OTP
+// ══════════════════════════════════════════════════════════════
+// Build OTP input boxes
+(function() {
+  var row = document.getElementById('otpRow');
+  for (var i = 0; i < 6; i++) {
+    (function(idx) {
+      var inp = document.createElement('input');
+      inp.type = 'tel'; inp.maxLength = 1; inp.className = 'otp-d';
+      inp.id = 'od' + idx; inp.inputMode = 'numeric';
+      inp.addEventListener('input', function() {
+        this.value = this.value.replace(/\D/g,'');
+        if (this.value && idx < 5) document.getElementById('od'+(idx+1)).focus();
+        refreshVerifyBtn();
+      });
+      inp.addEventListener('keydown', function(e) {
+        if (e.key === 'Backspace' && !this.value && idx > 0)
+          document.getElementById('od'+(idx-1)).focus();
+      });
+      row.appendChild(inp);
+    })(i);
+  }
+
+  // Paste support on the row
+  row.addEventListener('paste', function(e) {
+    var txt = (e.clipboardData || window.clipboardData).getData('text').replace(/\D/g,'').slice(0,6);
+    if (txt.length === 6) {
+      for (var k = 0; k < 6; k++) {
+        var d = document.getElementById('od'+k);
+        if (d) { d.value = txt[k]; d.className = 'otp-d ok'; }
+      }
+      refreshVerifyBtn();
+      e.preventDefault();
+    }
+  });
+})();
+
+function refreshVerifyBtn() {
+  var full = true;
+  for (var i = 0; i < 6; i++) {
+    var d = document.getElementById('od'+i);
+    if (!d || !d.value) { full = false; d && (d.className='otp-d'); }
+    else d.className = 'otp-d ok';
+  }
+  document.getElementById('btnVerifyOtp').disabled = !full;
+}
+
+async function sendOtp() {
+  var btn = document.getElementById('btnSendOtp');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spin"></span> Sending…';
+  showAlert('err2','','');
+
+  try {
+    var res  = await fetch('/api/otp/send', {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ phone: reg.phone })
+    });
+    var data = await res.json();
+    if (!res.ok) throw new Error(data.error);
+
+    // Show OTP entry
+    document.getElementById('otpSendWrap').style.display = 'none';
+    document.getElementById('otpEntryWrap').style.display = 'block';
+    document.getElementById('od0').focus();
+
+    // Demo: show OTP on screen
+    if (data.demoOtp) {
+      var hint = document.getElementById('otpHint');
+      hint.style.display = 'block';
+      hint.textContent = '📱 Demo OTP: ' + data.demoOtp;
+    }
+
+    startOtpCountdown(300);
+    showAlert('err2','ok','✅ ' + data.message);
+
+  } catch(e) {
+    showAlert('err2','err','❌ ' + e.message);
+    btn.disabled = false;
+    btn.innerHTML = '📤 Send OTP';
+  }
+}
+
+function startOtpCountdown(secs) {
+  clearInterval(otpCountdownInterval);
+  otpCountdownInterval = setInterval(function() {
+    secs--;
+    var m = Math.floor(secs/60), s = secs % 60;
+    var el = document.getElementById('otpCountdown');
+    if (el) el.textContent = 'OTP expires in ' + m + ':' + (s<10?'0':'')+s;
+    if (secs <= 0) {
+      clearInterval(otpCountdownInterval);
+      if (el) el.textContent = 'OTP expired. Please resend.';
+    }
+  }, 1000);
+}
+
+function resetOtp() {
+  clearInterval(otpCountdownInterval);
+  document.getElementById('otpSendWrap').style.display = 'block';
+  document.getElementById('otpEntryWrap').style.display = 'none';
+  for (var i = 0; i < 6; i++) {
+    var d = document.getElementById('od'+i);
+    if (d) { d.value = ''; d.className = 'otp-d'; }
+  }
+  document.getElementById('otpHint').style.display = 'none';
+  document.getElementById('btnVerifyOtp').disabled = true;
+  var btn = document.getElementById('btnSendOtp');
+  btn.disabled = false; btn.innerHTML = '📤 Send OTP';
+  showAlert('err2','','');
+}
+
+async function verifyOtp() {
+  var otp = '';
+  for (var i = 0; i < 6; i++) {
+    var d = document.getElementById('od'+i);
+    otp += (d ? d.value : '');
+  }
+  if (otp.length < 6) return showAlert('err2','err','Enter the complete 6-digit OTP.');
+
+  var btn = document.getElementById('btnVerifyOtp');
+  btn.disabled = true; btn.innerHTML = '<span class="spin"></span> Verifying…';
+  showAlert('err2','','');
+
+  try {
+    var res  = await fetch('/api/otp/verify', {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ phone: reg.phone, otp: otp })
+    });
+    var data = await res.json();
+    if (!res.ok) throw new Error(data.error);
+
+    clearInterval(otpCountdownInterval);
+    reg.phoneVerified = true;
+    showAlert('err2','ok','✅ Phone verified!');
+    setTimeout(function() {
+      goToStep(3);
+      showStep3a();
+    }, 700);
+
+  } catch(e) {
+    showAlert('err2','err','❌ ' + e.message);
+    btn.disabled = false; btn.innerHTML = '✅ Verify OTP';
+  }
+}
+
+// ══════════════════════════════════════════════════════════════
+// STEP 3 — ID Proof
+// ══════════════════════════════════════════════════════════════
+function showStep3a() {
+  document.getElementById('step3a').style.display = 'block';
+  document.getElementById('step3b').style.display = 'none';
+  document.getElementById('step3c').style.display = 'none';
+}
+
+function pickProof(type) {
+  proofType = type;
+  document.getElementById('pc-aadhaar').classList.toggle('sel', type === 'aadhaar');
+  document.getElementById('pc-college').classList.toggle('sel', type === 'college');
+  document.getElementById('btnGoScan').disabled = false;
+
+  var tip = document.getElementById('proofTip');
+  tip.style.display = 'block';
+  if (type === 'aadhaar') {
+    tip.innerHTML = '<div class="alert info" style="font-size:12px;margin:0;">🪪 <strong>Aadhaar Tips:</strong> Show the front with your photo. Name and DOB must be clearly visible. Avoid glare and shadows.</div>';
+  } else {
+    tip.innerHTML = '<div class="alert warn" style="font-size:12px;margin:0;">🎓 <strong>College ID Tips:</strong> Must show full name AND Date of Birth. IDs without DOB will not be accepted.</div>';
+  }
+}
+
+function startDocScan() {
+  if (!proofType) return showAlert('err3a','err','Please select an ID type first.');
+  document.getElementById('step3a').style.display = 'none';
+  document.getElementById('step3b').style.display = 'block';
+  document.getElementById('step3c').style.display = 'none';
+  document.getElementById('scanTitle').textContent = proofType === 'aadhaar' ? '📷 Scan Aadhaar Card' : '📷 Scan College ID';
+  document.getElementById('docTipBox').innerHTML = proofType === 'aadhaar'
+    ? '<div class="alert info" style="font-size:12px;margin:0;">🪪 Show the front side — photo, name and DOB all visible</div>'
+    : '<div class="alert warn" style="font-size:12px;margin:0;">🎓 Show full name, DOB and college name clearly</div>';
+  openDocCam();
+}
+
+async function openDocCam() {
+  document.getElementById('docLoadWrap').style.display = 'block';
+  document.getElementById('docCamWrap').style.display = 'none';
+  document.getElementById('docLoadTxt').textContent = 'Requesting camera…';
+
+  try {
+    docStream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: docFacing, width: {ideal:1920}, height: {ideal:1080}, frameRate:{ideal:30} }
+    }).catch(function() {
+      return navigator.mediaDevices.getUserMedia({ video: {facingMode: docFacing} });
+    });
+  } catch(e) {
+    showAlert('err3b','err','📷 Camera blocked. Allow camera permission and refresh.');
+    document.getElementById('docLoadWrap').style.display = 'none';
+    return;
+  }
+
+  var v = document.getElementById('docVid');
+  v.srcObject = docStream; v.play();
+  applyDocFilter();
+  document.getElementById('docLoadWrap').style.display = 'none';
+  document.getElementById('docCamWrap').style.display = 'block';
+  startDocLight();
+}
+
+function applyDocFilter() {
+  var v = document.getElementById('docVid');
+  if (v) v.style.filter = docBoost ? 'brightness(2) contrast(1.6)' : 'brightness(1.3) contrast(1.15)';
+}
+
+function flipDocCam() {
+  stopDocCam();
+  docFacing = docFacing === 'environment' ? 'user' : 'environment';
+  openDocCam();
+}
+
+function toggleDocBoost() {
+  docBoost = !docBoost;
+  document.getElementById('docBoostBtn').classList.toggle('on', docBoost);
+  applyDocFilter();
+}
+
+function startDocLight() {
+  clearInterval(docLightInterval);
+  docLightInterval = setInterval(function() {
+    var v = document.getElementById('docVid');
+    if (!v || !v.videoWidth) return;
+    try {
+      var c = document.createElement('canvas'); c.width=80; c.height=50;
+      var ctx = c.getContext('2d'); ctx.drawImage(v,0,0,80,50);
+      var px = ctx.getImageData(0,0,80,50).data;
+      var s = 0;
+      for (var i=0;i<px.length;i+=16) s += (px[i]+px[i+1]+px[i+2])/3;
+      docLux = s/(px.length/16);
+      var chip = document.getElementById('docLx');
+      if (!chip) return;
+      if (docLux < 50)  { chip.textContent='🌑 Very Dark'; chip.style.background='rgba(120,53,15,.85)'; if(!docBoost){docBoost=true;applyDocFilter();document.getElementById('docBoostBtn').classList.add('on');} }
+      else if (docLux<90)  { chip.textContent='🌙 Low';       chip.style.background='rgba(100,50,0,.85)'; }
+      else if (docLux<160) { chip.textContent='💡 OK';        chip.style.background='rgba(0,0,0,.6)'; }
+      else                 { chip.textContent='☀️ Good';      chip.style.background='rgba(5,80,40,.85)'; }
+    } catch(e) {}
+  }, 800);
+}
+
+function stopDocCam() {
+  clearInterval(docLightInterval);
+  if (docStream) { docStream.getTracks().forEach(function(t){t.stop();}); docStream = null; }
+}
+
+async function captureDocument() {
+  var btn = document.getElementById('btnCapture');
+  btn.disabled = true; btn.innerHTML = '<span class="spin-b"></span> Capturing…';
+
+  var frame = document.getElementById('docFrame');
+  frame.className = 'doc-frame scan';
+
+  await new Promise(function(r){setTimeout(r,400);});
+
+  var vid = document.getElementById('docVid');
+  var cnv = document.getElementById('docCanvas');
+  cnv.width  = vid.videoWidth  || 1280;
+  cnv.height = vid.videoHeight || 720;
+  var ctx = cnv.getContext('2d');
+  var bri = docLux < 80 ? 1.9 : docLux < 130 ? 1.5 : 1.2;
+  var con = docLux < 80 ? 1.7 : 1.3;
+  ctx.filter = 'brightness('+bri+') contrast('+con+')';
+  ctx.drawImage(vid, 0, 0);
+
+  frame.className = 'doc-frame good';
+  stopDocCam();
+
+  document.getElementById('step3b').style.display = 'none';
+  document.getElementById('step3c').style.display = 'block';
+  document.getElementById('ocrProgress').style.display = 'block';
+  document.getElementById('ocrResult').style.display   = 'none';
+  document.getElementById('ocrActions').style.display  = 'none';
+
+  await runOCR(cnv);
+}
+
+async function runOCR(canvas) {
+  // Load Tesseract lazily only now
+  if (typeof Tesseract === 'undefined') {
+    document.getElementById('ocrTxt').textContent = 'Loading OCR engine…';
+    await loadScript('https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js');
+  }
+
+  try {
+    document.getElementById('ocrTxt').textContent = 'Initialising…';
+    document.getElementById('ocrBar').style.width = '10%';
+
+    var worker = await Tesseract.createWorker('eng', 1, {
+      logger: function(m) {
+        if (m.status === 'recognizing text') {
+          var pct = Math.round(m.progress * 75) + 15;
+          document.getElementById('ocrBar').style.width = pct + '%';
+          document.getElementById('ocrTxt').textContent = 'Reading text… ' + pct + '%';
+        }
+      }
+    });
+
+    await worker.setParameters({
+      tessedit_char_whitelist: 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789:/- '
+    });
+
+    var result = await worker.recognize(canvas);
+    await worker.terminate();
+
+    document.getElementById('ocrBar').style.width = '100%';
+    document.getElementById('ocrTxt').textContent = 'Analysing…';
+    await new Promise(function(r){setTimeout(r,400);});
+
+    showOCRResult(result.data.text);
+
+  } catch(e) {
+    document.getElementById('ocrProgress').style.display = 'none';
+    document.getElementById('ocrResult').style.display = 'block';
+    document.getElementById('ocrResult').innerHTML = '<div class="alert err">❌ OCR failed: ' + e.message + '. Try better lighting and retake.</div>';
+    document.getElementById('ocrActions').style.display = 'block';
+    document.getElementById('btnAcceptProof').style.display = 'none';
+  }
+}
+
+function showOCRResult(rawText) {
+  document.getElementById('ocrProgress').style.display = 'none';
+  document.getElementById('ocrResult').style.display = 'block';
+  document.getElementById('ocrActions').style.display = 'block';
+
+  // ── Extract DOB ───────────────────────────────────────────
+  var dobRaw = null, dobExtracted = null;
+  var dobPatterns = [
+    /DOB\s*[:\-]?\s*(\d{1,2}[\/\-\.]\d{1,2}[\/\-\.]\d{4})/i,
+    /Date\s*of\s*Birth\s*[:\-]?\s*(\d{1,2}[\/\-\.]\d{1,2}[\/\-\.]\d{4})/i,
+    /Birth\s*[:\-]?\s*(\d{1,2}[\/\-\.]\d{1,2}[\/\-\.]\d{4})/i,
+    /(\d{2}[\/\-\.]\d{2}[\/\-\.]\d{4})/,
+    /Year\s*of\s*Birth\s*[:\-]?\s*(\d{4})/i,
+    /YOB\s*[:\-]?\s*(\d{4})/i,
+  ];
+  for (var pi = 0; pi < dobPatterns.length; pi++) {
+    var m = rawText.match(dobPatterns[pi]);
+    if (m) { dobRaw = m[1]; break; }
+  }
+
+  if (dobRaw) {
+    var parts = dobRaw.split(/[\/\-\.]/);
+    if (parts.length === 3) {
+      if (parts[2].length === 4) {
+        dobExtracted = parts[2] + '-' + parts[1].padStart(2,'0') + '-' + parts[0].padStart(2,'0');
+      } else if (parts[0].length === 4) {
+        dobExtracted = parts[0] + '-' + parts[1].padStart(2,'0') + '-' + parts[2].padStart(2,'0');
+      }
+    } else if (parts.length === 1 && parts[0].length === 4) {
+      dobExtracted = parts[0] + '-01-01'; // year only
+    }
+  }
+
+  // ── Check DOB match ───────────────────────────────────────
+  var dobMatch = false;
+  if (dobExtracted) {
+    var regD = new Date(reg.dob), extD = new Date(dobExtracted);
+    dobMatch = Math.abs(regD - extD) < 2 * 24 * 60 * 60 * 1000 ||
+               (dobRaw && dobRaw.length === 4 && dobRaw === reg.dob.slice(0,4));
+  }
+
+  // ── Check name match ──────────────────────────────────────
+  var nameMatch = false, foundName = '';
+  var lines = rawText.split('\n');
+  var regWords = reg.name.toUpperCase().split(' ').filter(function(w){return w.length>2;});
+  for (var li = 0; li < lines.length; li++) {
+    var lineUp = lines[li].toUpperCase().replace(/[^A-Z ]/g,'').trim();
+    if (!lineUp) continue;
+    var hits = regWords.filter(function(w){return lineUp.indexOf(w)>=0;}).length;
+    if (hits >= Math.max(1, Math.floor(regWords.length * 0.6))) {
+      nameMatch = true; foundName = lines[li].trim(); break;
+    }
+  }
+
+  // ── Render ────────────────────────────────────────────────
+  var overall = dobMatch;
+  var box = document.getElementById('ocrResult');
+  box.innerHTML =
+    '<div class="ocr-box ' + (overall?'ok':'fail') + '">' +
+      '<div style="font-weight:800;font-size:13px;margin-bottom:10px;color:'+(overall?'#15803d':'#b91c1c')+'">' +
+        (overall ? '✅ Document Verified' : '❌ Could Not Fully Verify') +
+      '</div>' +
+      '<div class="ocr-row">' +
+        '<span class="ocr-k">Name</span>' +
+        '<span class="ocr-v">' + (foundName||'Not detected') + '</span>' +
+        '<span class="tag '+(nameMatch?'ok':'fail')+'">'+(nameMatch?'Match':'No match')+'</span>' +
+      '</div>' +
+      '<div class="ocr-row">' +
+        '<span class="ocr-k">DOB</span>' +
+        '<span class="ocr-v">' + (dobRaw||'Not detected') + '</span>' +
+        '<span class="tag '+(dobMatch?'ok':'fail')+'">'+(dobMatch?'Match':'No match')+'</span>' +
+      '</div>' +
+      '<div style="margin-top:10px;padding-top:10px;border-top:1px solid '+(overall?'#bbf7d0':'#fecaca')+';font-size:12px;color:#64748b;">' +
+        'Registered: <strong>' + reg.name + '</strong> · DOB: <strong>' + reg.dob + '</strong>' +
+      '</div>' +
+    '</div>';
+
+  var acceptBtn = document.getElementById('btnAcceptProof');
+  if (dobMatch) {
+    acceptBtn.style.display = 'flex';
+    if (!nameMatch) {
+      box.innerHTML += '<div class="alert warn" style="margin-top:8px;font-size:12px;">⚠️ DOB matched. Name not clearly detected (OCR limitation) — you may proceed.</div>';
+    }
+  } else {
+    acceptBtn.style.display = 'none';
+    box.innerHTML += '<div class="alert err" style="margin-top:8px;font-size:12px;">❌ DOB could not be matched. Ensure DOB is clearly visible and retry.</div>';
+  }
+}
+
+function acceptProof() {
+  proofOK = true;
+  reg.proofType = proofType;
+  stopDocCam();
+  goToStep(4);
+  loadFaceStep();
+}
+
+function retryDocScan() {
+  document.getElementById('step3c').style.display = 'none';
+  document.getElementById('step3b').style.display = 'block';
+  document.getElementById('docLoadWrap').style.display = 'block';
+  document.getElementById('docCamWrap').style.display = 'none';
+  document.getElementById('btnCapture').disabled = false;
+  document.getElementById('btnCapture').innerHTML = '📸 Capture';
+  document.getElementById('docFrame').className = 'doc-frame';
+  openDocCam();
+}
+
+// ══════════════════════════════════════════════════════════════
+// STEP 4 — Face Capture (loads face-api.js lazily)
+// ══════════════════════════════════════════════════════════════
+async function loadFaceStep() {
+  document.getElementById('step4a').style.display = 'block';
+  document.getElementById('step4b').style.display = 'none';
+  document.getElementById('step4c').style.display = 'none';
+  setAILoad('Starting camera…', 8);
+
+  // Start camera first (fast)
+  try {
+    faceStream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: facingMode, width:{ideal:1280}, height:{ideal:960}, frameRate:{ideal:30} }
+    }).catch(function() {
+      return navigator.mediaDevices.getUserMedia({ video: {facingMode: facingMode} });
+    });
+  } catch(e) {
+    document.getElementById('step4a').style.display = 'none';
+    document.getElementById('step4b').style.display = 'block';
+    showAlert('err4','err','📷 Camera blocked. Allow camera permission and refresh.');
+    return;
+  }
+
+  var fv = document.getElementById('faceVid');
+  fv.srcObject = faceStream; fv.play();
+  applyFaceFilter();
+
+  // Load face-api.js lazily
+  if (typeof faceapi === 'undefined') {
+    setAILoad('Loading face-api…', 15);
+    await loadScript('https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/dist/face-api.min.js');
+  }
+
+  await loadFaceModels();
+}
+
+function setAILoad(txt, pct) {
+  var el = document.getElementById('aiLoadTxt'); if (el) el.textContent = txt;
+  var bar = document.getElementById('aiLoadBar'); if (bar) bar.style.width = pct + '%';
+}
+
+function applyFaceFilter() {
+  var v = document.getElementById('faceVid');
+  if (v) v.style.filter = faceBoost ? 'brightness(2.2) contrast(1.6)' : 'brightness(1.5) contrast(1.25)';
+}
+
+function flipFaceCam() { stopFaceCam(); facingMode = facingMode==='user'?'environment':'user'; loadFaceStep(); }
+function toggleFaceBoost() { faceBoost=!faceBoost; document.getElementById('faceBoostBtn').classList.toggle('on',faceBoost); applyFaceFilter(); }
+
+async function loadFaceModels() {
+  if (faceModelsLoaded) { onFaceReady(); return; }
+  for (var ci = 0; ci < [CDN1,CDN2].length; ci++) {
+    var url = [CDN1,CDN2][ci];
+    try {
+      setAILoad('Loading detector…', 35);
+      await faceapi.nets.ssdMobilenetv1.loadFromUri(url);
+      setAILoad('Loading landmarks…', 60);
+      await faceapi.nets.faceLandmark68Net.loadFromUri(url);
+      setAILoad('Loading recognition…', 82);
+      await faceapi.nets.faceRecognitionNet.loadFromUri(url);
+      faceModelsLoaded = true;
+      setAILoad('✅ Ready!', 100);
+      setTimeout(onFaceReady, 300);
+      return;
+    } catch(e) { console.warn('CDN fail', url); }
+  }
+  // Tiny fallback
+  for (var ci2 = 0; ci2 < [CDN1,CDN2].length; ci2++) {
+    var url2 = [CDN1,CDN2][ci2];
+    try {
+      await faceapi.nets.tinyFaceDetector.loadFromUri(url2);
+      await faceapi.nets.faceLandmark68TinyNet.loadFromUri(url2);
+      await faceapi.nets.faceRecognitionNet.loadFromUri(url2);
+      faceModelsLoaded = true; window._tiny = true;
+      setTimeout(onFaceReady, 300); return;
+    } catch(e2) {}
+  }
+  showAlert('err4','warn','⚠️ AI unavailable. Using manual capture.');
+  showFacePanel('cam');
+  var cb = document.getElementById('btnCapFace');
+  cb.disabled = false; cb.textContent = '📷 Capture Photo'; cb.onclick = manualFaceCap;
+}
+
+function onFaceReady() {
+  showFacePanel('cam');
+  startFaceLoop();
+  setTimeout(function() {
+    if (document.getElementById('btnCapFace').disabled)
+      document.getElementById('btnManualFace').style.display = 'flex';
+  }, 20000);
+}
+
+function showFacePanel(p) {
+  document.getElementById('step4a').style.display = p==='load'?'block':'none';
+  document.getElementById('step4b').style.display = p==='cam' ?'block':'none';
+  document.getElementById('step4c').style.display = p==='prev'?'block':'none';
+}
+
+function getFaceOpts(sz) {
+  sz = sz || 512;
+  return window._tiny
+    ? new faceapi.TinyFaceDetectorOptions({inputSize:sz, scoreThreshold:0.25})
+    : new faceapi.SsdMobilenetv1Options({minConfidence:0.3});
+}
+
+function startFaceLoop() {
+  var vid = document.getElementById('faceVid');
+  faceDetectInterval = setInterval(async function() {
+    if (!vid.videoWidth || faceCapturing) return;
+    measureFaceLux(vid);
+    try {
+      var frame = enhanceFrame(vid);
+      var det = await faceapi.detectSingleFace(frame, getFaceOpts()).withFaceLandmarks()
+             || await faceapi.detectSingleFace(vid,   getFaceOpts()).withFaceLandmarks();
+      if (det) {
+        document.getElementById('faceOval').className = 'oval rdy';
+        document.getElementById('faceTxt').textContent = '✅ Face detected! Tap Start Face Scan';
+        document.getElementById('btnCapFace').disabled = false;
+        document.getElementById('btnManualFace').style.display = 'none';
+      } else {
+        document.getElementById('faceOval').className = 'oval';
+        document.getElementById('faceTxt').textContent = faceLux < 60
+          ? '🌙 Too dark — tap ☀️ or move to better light'
+          : '👤 Align your face inside the oval';
+        document.getElementById('btnCapFace').disabled = true;
+      }
+    } catch(e) {}
+  }, 300);
+}
+
+async function captureFace() {
+  if (faceCapturing) return;
+  faceCapturing = true; faceDescs = [];
+  clearInterval(faceDetectInterval);
+  document.getElementById('btnCapFace').disabled = true;
+  document.getElementById('faceDots').style.display = 'flex';
+
+  var vid = document.getElementById('faceVid');
+  var snap = null;
+
+  for (var i = 0; i < 3; i++) {
+    setDot(i);
+    document.getElementById('faceTxt').textContent = '📸 Frame ' + (i+1) + ' of 3…';
+    var frame = enhanceFrame(vid);
+    var det = await faceapi.detectSingleFace(frame, getFaceOpts(640)).withFaceLandmarks().withFaceDescriptor()
+           || await faceapi.detectSingleFace(vid,   getFaceOpts(640)).withFaceLandmarks().withFaceDescriptor();
+    if (!det) {
+      faceCapturing = false;
+      document.getElementById('faceDots').style.display = 'none';
+      document.getElementById('faceOval').className = 'oval bad';
+      document.getElementById('faceTxt').textContent = '❌ Face lost — hold still and retry';
+      document.getElementById('btnCapFace').disabled = false;
+      setTimeout(function() { document.getElementById('faceOval').className='oval'; startFaceLoop(); }, 2000);
+      return;
+    }
+    faceDescs.push(det.descriptor);
+    if (i === 0) snap = vid;
+    await new Promise(function(r){setTimeout(r,300);});
+  }
+
+  // Mark all dots filled
+  for (var j=0;j<3;j++) document.getElementById('d'+j).className='dot f';
+  document.getElementById('faceTxt').textContent = '✅ All 3 frames captured!';
+  await new Promise(function(r){setTimeout(r,500);});
+
+  finalDesc = avgDescs(faceDescs);
+  var cnv = document.getElementById('faceCanvas');
+  cnv.width = snap.videoWidth; cnv.height = snap.videoHeight;
+  var ctx = cnv.getContext('2d'); ctx.filter='brightness(1.15)'; ctx.drawImage(snap,0,0);
+  showFacePanel('prev');
+  faceCapturing = false;
+}
+
+function setDot(active) {
+  for (var j=0;j<3;j++)
+    document.getElementById('d'+j).className = 'dot' + (j<active?' f':j===active?' a':'');
+}
+
+async function manualFaceCap() {
+  faceCapturing = true; clearInterval(faceDetectInterval);
+  var vid = document.getElementById('faceVid'), det = null;
+  var confs = [0.25, 0.15, 0.08];
+  for (var ci=0;ci<confs.length;ci++) {
+    var o = window._tiny
+      ? new faceapi.TinyFaceDetectorOptions({inputSize:608,scoreThreshold:confs[ci]})
+      : new faceapi.SsdMobilenetv1Options({minConfidence:confs[ci]});
+    det = await faceapi.detectSingleFace(enhanceFrame(vid),o).withFaceLandmarks().withFaceDescriptor()
+       || await faceapi.detectSingleFace(vid,o).withFaceLandmarks().withFaceDescriptor();
+    if (det) break;
+  }
+  finalDesc = det ? det.descriptor : new Float32Array(pixelFP(vid));
+  if (!det) showAlert('err4','warn','⚠️ Basic capture used — accuracy may be lower.');
+  var cnv = document.getElementById('faceCanvas');
+  cnv.width = vid.videoWidth||480; cnv.height = vid.videoHeight||360;
+  cnv.getContext('2d').drawImage(vid,0,0);
+  showFacePanel('prev'); faceCapturing = false;
+}
+
+function retakeFace() {
+  finalDesc = null; faceDescs = []; faceCapturing = false;
+  document.getElementById('faceDots').style.display = 'none';
+  document.getElementById('faceOval').className = 'oval';
+  document.getElementById('btnCapFace').disabled = true;
+  document.getElementById('btnCapFace').textContent = '📸 Start Face Scan';
+  document.getElementById('btnCapFace').onclick = captureFace;
+  showFacePanel('cam');
+  showAlert('err4','','');
+  startFaceLoop();
+}
+
+function stopFaceCam() {
+  clearInterval(faceDetectInterval);
+  if (faceStream) { faceStream.getTracks().forEach(function(t){t.stop();}); faceStream=null; }
+}
+
+// ══════════════════════════════════════════════════════════════
+// STEP 5 — Register
+// ══════════════════════════════════════════════════════════════
+async function doRegister() {
+  var btn = document.getElementById('btnRegister');
+  btn.disabled = true; btn.innerHTML = '<span class="spin"></span> Registering…';
+  document.getElementById('step5content').innerHTML = '';
+
+  try {
+    var res = await fetch('/api/voter/register', {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({
+        name: reg.name, dob: reg.dob, phone: reg.phone,
+        address: reg.address, proofType: reg.proofType || proofType,
+        proofVerified: proofOK,
+        faceDescriptor: Array.from(finalDesc)
+      })
+    });
+    var data = await res.json();
+
+    if (res.status === 409 && data.error === 'DUPLICATE_VOTER') {
+      stopFaceCam();
+      goToStep(5);
+      showDuplicate(data);
+      return;
+    }
+    if (!res.ok) throw new Error(data.error || 'Registration failed.');
+
+    stopFaceCam();
+    goToStep(5);
+    showSuccess(data);
+
+  } catch(e) {
+    showAlert('','','');
+    // Show error near button
+    document.getElementById('step4c').insertAdjacentHTML('afterbegin',
+      '<div class="alert err" style="margin-bottom:10px;">❌ '+e.message+'</div>');
+    btn.disabled = false; btn.innerHTML = '✅ Complete Registration';
+  }
+}
+
+function showSuccess(data) {
+  document.getElementById('step5content').innerHTML =
+    '<div class="card" style="text-align:center;padding:28px 20px;">' +
+      '<div style="font-size:3rem;margin-bottom:12px;">🎉</div>' +
+      '<h2 style="margin-bottom:6px;">Registered Successfully!</h2>' +
+      '<p style="color:#64748b;font-size:13px;margin-bottom:20px;">Save your Voter ID — you will need it to login.</p>' +
+      '<div class="voter-card">' +
+        '<div style="font-size:10px;opacity:.6;text-transform:uppercase;letter-spacing:.08em;">🗳️ Your Voter ID</div>' +
+        '<div class="voter-id">' + data.voterId + '</div>' +
+        '<div style="font-weight:700;">' + data.name + '</div>' +
+        '<div style="font-size:11px;opacity:.5;margin-top:8px;">📸 Screenshot this card now!</div>' +
+      '</div>' +
+      '<div class="alert warn" style="text-align:left;margin:14px 0;font-size:12px;">' +
+        '⚠️ <strong>Take a screenshot NOW.</strong> Your Voter ID cannot be recovered if lost.' +
+      '</div>' +
+      '<a href="/voter-login" class="btn-main blue" style="max-width:300px;margin:0 auto;display:flex;">Login to Vote →</a>' +
+    '</div>';
+}
+
+function showDuplicate(data) {
+  var reasons = {
+    phone:    'This phone number is already registered.',
+    name_dob: 'Same name and date of birth already exists in our records.',
+    face:     'Our AI detected your face is already registered.'
+  };
+  document.getElementById('step5content').innerHTML =
+    '<div class="card" style="text-align:center;padding:24px 20px;">' +
+      '<div style="width:68px;height:68px;background:#fee2e2;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:2rem;margin:0 auto 14px;">🚫</div>' +
+      '<h2 style="color:#b91c1c;margin-bottom:6px;">Already Registered!</h2>' +
+      '<p style="color:#64748b;font-size:13px;margin-bottom:14px;">You are an existing voter — not a new voter.</p>' +
+      '<div style="background:#fef2f2;border:2px solid #fecaca;border-radius:14px;padding:14px;margin-bottom:14px;text-align:left;">' +
+        '<p style="font-size:13px;color:#7f1d1d;margin-bottom:12px;">⚠️ ' + (reasons[data.type] || data.message) + '</p>' +
+        '<div style="display:flex;align-items:center;gap:10px;border-top:1px solid #fecaca;padding-top:12px;">' +
+          '<div style="width:40px;height:40px;background:#fee2e2;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:1.3rem;flex-shrink:0;">🧑‍💼</div>' +
+          '<div>' +
+            '<div style="font-weight:800;">' + data.existingName + '</div>' +
+            '<div style="font-family:monospace;font-size:15px;color:#4f46e5;font-weight:900;">' + data.existingVoterId + '</div>' +
+          '</div>' +
+        '</div>' +
+      '</div>' +
+      '<div class="alert ok" style="text-align:left;font-size:13px;margin-bottom:14px;">✅ Use Voter ID <strong style="font-family:monospace;">' + data.existingVoterId + '</strong> to login and vote.</div>' +
+      '<a href="/voter-login" class="btn-main blue" style="display:flex;margin-bottom:8px;">🗳️ Go to Voter Login</a>' +
+      '<a href="/" style="font-size:13px;color:#94a3b8;display:block;margin-top:6px;">← Home</a>' +
+    '</div>';
+}
+
+// ══════════════════════════════════════════════════════════════
+// UTILITIES
+// ══════════════════════════════════════════════════════════════
+function avgDescs(descs) {
+  var out = new Float32Array(128);
+  for (var d=0;d<descs.length;d++) for (var i=0;i<128;i++) out[i]+=descs[d][i];
+  for (var i=0;i<128;i++) out[i]/=descs.length;
+  return out;
+}
+
+function enhanceFrame(vid) {
+  var c=document.createElement('canvas');
+  c.width=vid.videoWidth||640; c.height=vid.videoHeight||480;
+  var ctx=c.getContext('2d');
+  var b = faceLux<80?2.0:faceLux<130?1.6:1.3;
+  var con = faceLux<80?1.6:1.3;
+  ctx.filter='brightness('+b+') contrast('+con+')';
+  ctx.drawImage(vid,0,0); return c;
+}
+
+function measureFaceLux(vid) {
+  try {
+    var c=document.createElement('canvas'); c.width=80; c.height=60;
+    var ctx=c.getContext('2d'); ctx.drawImage(vid,0,0,80,60);
+    var px=ctx.getImageData(0,0,80,60).data;
+    var s=0; for(var i=0;i<px.length;i+=16) s+=(px[i]+px[i+1]+px[i+2])/3;
+    faceLux=s/(px.length/16);
+    var chip=document.getElementById('faceLx'); if(!chip) return;
+    if(faceLux<50){chip.textContent='🌑 Very Dark';chip.style.background='rgba(120,53,15,.85)';if(!faceBoost){faceBoost=true;applyFaceFilter();document.getElementById('faceBoostBtn').classList.add('on');}}
+    else if(faceLux<90){chip.textContent='🌙 Low';chip.style.background='rgba(100,50,0,.85)';}
+    else if(faceLux<160){chip.textContent='💡 OK';chip.style.background='rgba(0,0,0,.6)';}
+    else{chip.textContent='☀️ Good';chip.style.background='rgba(5,80,40,.85)';}
+  } catch(e){}
+}
+
+function pixelFP(vid) {
+  var c=document.createElement('canvas'); c.width=64; c.height=64;
+  c.getContext('2d').drawImage(vid,0,0,64,64);
+  var px=c.getContext('2d').getImageData(0,0,64,64).data;
+  return Array.from({length:128},function(_,i){
+    var idx=((i/128)*(px.length/4))|0;
+    return(px[idx*4]+px[idx*4+1]+px[idx*4+2])/(255*3);
+  });
+}
+
+function loadScript(src) {
+  return new Promise(function(resolve, reject) {
+    var s = document.createElement('script');
+    s.src = src; s.onload = resolve; s.onerror = reject;
+    document.head.appendChild(s);
+  });
+}
+
+// ══════════════════════════════════════════════════════════════
+// INIT
+// ══════════════════════════════════════════════════════════════
+goToStep(1);
+</script>
+</body>
+</html>

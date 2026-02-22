@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>VoteSecure — Online Voting System</title>
+  <link rel="stylesheet" href="/css/style.css"/>
+  <style>
+    .features { display: flex; gap: 24px; margin-top: 40px; flex-wrap: wrap; justify-content: center; }
+    .feature { display: flex; align-items: center; gap: 8px; color: rgba(255,255,255,.8); font-size: 14px; font-weight: 500; }
+    .feature .dot { width: 8px; height: 8px; background: #818cf8; border-radius: 50%; }
+  </style>
+</head>
+<body>
+<div class="landing">
+  <div class="landing-logo">🗳️</div>
+  <h1 class="landing-title">VoteSecure</h1>
+  <p class="landing-sub">Secure · Transparent · Face-Verified Online Voting Platform</p>
+
+  <div class="landing-cards">
+    <!-- Voter -->
+    <a href="/voter-login" class="landing-card">
+      <span class="icon">🧑‍💼</span>
+      <h2>I'm a Voter</h2>
+      <p>Login with your Voter ID and verify your identity with face recognition to cast your vote.</p>
+      <span class="btn-card">Voter Login →</span>
+    </a>
+
+    <!-- Admin -->
+    <a href="/admin-login" class="landing-card">
+      <span class="icon">⚙️</span>
+      <h2>Admin Panel</h2>
+      <p>Manage elections, view live vote counts, monitor results and manage registered voters.</p>
+      <span class="btn-card">Admin Login →</span>
+    </a>
+  </div>
+
+  <div class="features">
+    <span class="feature"><span class="dot"></span> Voter ID Authentication</span>
+    <span class="feature"><span class="dot"></span> Face Recognition Verification</span>
+    <span class="feature"><span class="dot"></span> One Vote Per Person</span>
+    <span class="feature"><span class="dot"></span> Live Results Dashboard</span>
+  </div>
+
+  <div style="margin-top: 40px; text-align:center;">
+    <a href="/register" style="color: rgba(255,255,255,.7); font-size:14px; text-decoration:underline;">
+      New voter? Register here →
+    </a>
+  </div>
+</div>
+
+<script>
+  // If already logged in, redirect
+  Promise.all([fetch('/api/voter/me'), fetch('/api/admin/me')])
+    .then(async ([vr, ar]) => {
+      const vd = await vr.json();
+      const ad = await ar.json();
+      if (vd.voter) window.location.href = '/vote';
+      if (ad.admin) window.location.href = '/admin';
+    });
+</script>
+</body>
+</html>

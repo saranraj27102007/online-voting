@@ -1,0 +1,620 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Admin Dashboard — VoteSecure</title>
+  <link rel="stylesheet" href="/css/style.css"/>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+</head>
+<body>
+
+<nav class="navbar">
+  <a href="/" class="navbar-brand"><span class="logo">🗳️</span> VoteSecure <span class="badge badge-danger" style="font-size:11px; margin-left:4px;">ADMIN</span></a>
+  <div class="nav-right">
+    <span class="nav-user-name" id="adminName"></span>
+    <button class="btn btn-secondary btn-sm" onclick="logout()">Logout</button>
+  </div>
+</nav>
+
+<div class="admin-layout">
+  <aside class="sidebar">
+    <div class="sidebar-section">
+      <div class="sidebar-section-title">Main</div>
+      <button class="sidebar-link active" onclick="showTab('overview',this)"><span class="icon">📊</span> Overview</button>
+      <button class="sidebar-link" onclick="showTab('elections',this)"><span class="icon">🗳️</span> Elections</button>
+      <button class="sidebar-link" onclick="showTab('results',this)"><span class="icon">📈</span> Live Results</button>
+    </div>
+    <div class="sidebar-section">
+      <div class="sidebar-section-title">Management</div>
+      <button class="sidebar-link" onclick="showTab('voters',this)"><span class="icon">👥</span> Voters</button>
+      <button class="sidebar-link" onclick="showTab('votelog',this)"><span class="icon">📋</span> Vote Log</button>
+      <button class="sidebar-link" onclick="showTab('create',this)"><span class="icon">➕</span> New Election</button>
+    </div>
+  </aside>
+
+  <main class="main-content">
+
+    <!-- ── OVERVIEW ── -->
+    <div id="tab-overview" class="tab-content active">
+      <div class="page-header">
+        <h2>Dashboard Overview</h2>
+        <p>Real-time system statistics</p>
+      </div>
+      <div class="stats-grid" id="statsGrid">
+        <div style="padding:30px; color:var(--muted);">Loading...</div>
+      </div>
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:20px; margin-top:4px;" id="chartRow">
+        <div class="card">
+          <h4 style="margin-bottom:16px;">🗳️ Voter Participation</h4>
+          <canvas id="turnoutChart" height="200"></canvas>
+        </div>
+        <div class="card">
+          <h4 style="margin-bottom:16px;">📊 Votes Per Election</h4>
+          <canvas id="electionsChart" height="200"></canvas>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── ELECTIONS ── -->
+    <div id="tab-elections" class="tab-content">
+      <div class="page-header flex justify-between items-center">
+        <div><h2>Manage Elections</h2><p>Control all elections</p></div>
+      </div>
+      <div id="electionsAdmin"></div>
+    </div>
+
+    <!-- ── LIVE RESULTS ── -->
+    <div id="tab-results" class="tab-content">
+      <div class="page-header flex justify-between items-center">
+        <div><h2>Live Results</h2><p>Real-time vote counts</p></div>
+        <button class="btn btn-secondary btn-sm" onclick="loadResults()">🔄 Refresh</button>
+      </div>
+      <div id="resultsContainer"></div>
+    </div>
+
+    <!-- ── VOTERS ── -->
+    <div id="tab-voters" class="tab-content">
+      <div class="page-header">
+        <h2>Registered Voters</h2>
+        <p>All voters in the system</p>
+      </div>
+      <div id="votersTable"></div>
+    </div>
+
+    <!-- ── VOTE LOG ── -->
+    <div id="tab-votelog" class="tab-content">
+      <div class="page-header flex justify-between items-center">
+        <div><h2>Vote Activity Log</h2><p>Timestamped record of all votes</p></div>
+        <button class="btn btn-secondary btn-sm" onclick="loadVoteLog()">🔄 Refresh</button>
+      </div>
+      <div id="voteLogTable"></div>
+    </div>
+
+    <!-- ── CREATE ELECTION ── -->
+    <div id="tab-create" class="tab-content">
+      <div class="page-header">
+        <h2>Create New Election</h2>
+        <p>Set up a new election for registered voters</p>
+      </div>
+      <div class="card" style="max-width:660px;">
+        <div id="createAlert"></div>
+        <div class="form-group">
+          <label>Election Title *</label>
+          <input type="text" id="elTitle" class="form-control" placeholder="e.g. General Election 2024"/>
+        </div>
+        <div class="form-group">
+          <label>Description</label>
+          <textarea id="elDesc" class="form-control" rows="2" placeholder="Brief description of this election"></textarea>
+        </div>
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:16px;">
+          <div class="form-group">
+            <label>Start Date *</label>
+            <input type="datetime-local" id="elStart" class="form-control"/>
+          </div>
+          <div class="form-group">
+            <label>End Date *</label>
+            <input type="datetime-local" id="elEnd" class="form-control"/>
+          </div>
+        </div>
+
+        <!-- ── Age Limit ── -->
+        <div style="border:2px solid #e2e8f0; border-radius:14px; overflow:hidden; margin-bottom:18px;" id="ageLimitBox">
+          <!-- Header -->
+          <div style="background:#f8fafc; padding:14px 16px; display:flex; align-items:center; justify-content:space-between; border-bottom:2px solid #e2e8f0;">
+            <div style="display:flex; align-items:center; gap:10px;">
+              <span style="font-size:1.3rem;">🎂</span>
+              <div>
+                <div style="font-weight:800; font-size:14px; color:#0f172a;">Voter Age Restriction</div>
+                <div style="font-size:12px; color:var(--muted); margin-top:1px;">Set minimum and/or maximum voter age (optional)</div>
+              </div>
+            </div>
+            <label style="display:flex; align-items:center; gap:8px; cursor:pointer; user-select:none;">
+              <span id="ageLimitToggleLabel" style="font-size:13px; font-weight:700; color:var(--muted);">OFF</span>
+              <div style="position:relative; width:44px; height:24px;">
+                <input type="checkbox" id="enableAgeLimit" onchange="toggleAgeLimit()" style="opacity:0; position:absolute; width:100%; height:100%; cursor:pointer; z-index:1; margin:0;"/>
+                <div id="toggleTrack" style="width:44px; height:24px; background:#cbd5e1; border-radius:99px; transition:background .2s;"></div>
+                <div id="toggleThumb" style="position:absolute; top:2px; left:2px; width:20px; height:20px; background:white; border-radius:50%; transition:left .2s; box-shadow:0 1px 4px rgba(0,0,0,.25);"></div>
+              </div>
+            </label>
+          </div>
+
+          <div id="ageLimitFields" style="display:none; padding:16px;">
+
+            <!-- Info note -->
+            <div style="background:#fef3c7; border:1px solid #fde68a; border-radius:10px; padding:10px 14px; font-size:12px; color:#92400e; margin-bottom:14px;">
+              ⚠️ Voters outside this age range will be blocked from voting in this election. Age is verified against the DOB provided during registration.
+            </div>
+
+            <div style="display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-bottom:14px;">
+              <!-- Min Age -->
+              <div>
+                <label style="font-size:11px; font-weight:800; text-transform:uppercase; letter-spacing:.05em; color:#64748b; display:block; margin-bottom:6px;">
+                  Minimum Age <span style="color:#ef4444;">*</span>
+                </label>
+                <div style="position:relative;">
+                  <input type="number" id="elMinAge" class="form-control" value="18" min="0" max="120"
+                    placeholder="18" oninput="updateAgeLimitPreview()"
+                    style="font-size:1.5rem; font-weight:900; text-align:center; padding:14px 38px 14px 14px; letter-spacing:.05em;"/>
+                  <div style="position:absolute; right:8px; top:50%; transform:translateY(-50%); display:flex; flex-direction:column; gap:2px;">
+                    <button type="button" onclick="stepAge('elMinAge',1)" style="background:#e2e8f0; border:none; border-radius:4px; width:24px; height:20px; cursor:pointer; font-size:12px; display:flex; align-items:center; justify-content:center; font-weight:700;">▲</button>
+                    <button type="button" onclick="stepAge('elMinAge',-1)" style="background:#e2e8f0; border:none; border-radius:4px; width:24px; height:20px; cursor:pointer; font-size:12px; display:flex; align-items:center; justify-content:center; font-weight:700;">▼</button>
+                  </div>
+                </div>
+                <div style="font-size:11px; color:var(--muted); margin-top:5px; text-align:center;">0 = no minimum age</div>
+              </div>
+
+              <!-- Max Age -->
+              <div>
+                <label style="font-size:11px; font-weight:800; text-transform:uppercase; letter-spacing:.05em; color:#64748b; display:block; margin-bottom:6px;">
+                  Maximum Age
+                </label>
+                <div style="position:relative;">
+                  <input type="number" id="elMaxAge" class="form-control" value="0" min="0" max="120"
+                    placeholder="0" oninput="updateAgeLimitPreview()"
+                    style="font-size:1.5rem; font-weight:900; text-align:center; padding:14px 38px 14px 14px; letter-spacing:.05em;"/>
+                  <div style="position:absolute; right:8px; top:50%; transform:translateY(-50%); display:flex; flex-direction:column; gap:2px;">
+                    <button type="button" onclick="stepAge('elMaxAge',1)" style="background:#e2e8f0; border:none; border-radius:4px; width:24px; height:20px; cursor:pointer; font-size:12px; display:flex; align-items:center; justify-content:center; font-weight:700;">▲</button>
+                    <button type="button" onclick="stepAge('elMaxAge',-1)" style="background:#e2e8f0; border:none; border-radius:4px; width:24px; height:20px; cursor:pointer; font-size:12px; display:flex; align-items:center; justify-content:center; font-weight:700;">▼</button>
+                  </div>
+                </div>
+                <div style="font-size:11px; color:var(--muted); margin-top:5px; text-align:center;">0 = no maximum age</div>
+              </div>
+            </div>
+
+            <!-- Quick presets -->
+            <div style="margin-bottom:14px;">
+              <div style="font-size:11px; font-weight:700; color:#64748b; text-transform:uppercase; letter-spacing:.05em; margin-bottom:8px;">⚡ Quick Presets</div>
+              <div style="display:flex; gap:8px; flex-wrap:wrap;">
+                <button type="button" onclick="setAgePreset(18,0)"  class="btn btn-secondary btn-sm">18+ General</button>
+                <button type="button" onclick="setAgePreset(18,25)" class="btn btn-secondary btn-sm">18–25 College</button>
+                <button type="button" onclick="setAgePreset(18,35)" class="btn btn-secondary btn-sm">18–35 Youth</button>
+                <button type="button" onclick="setAgePreset(21,60)" class="btn btn-secondary btn-sm">21–60</button>
+                <button type="button" onclick="setAgePreset(60,0)"  class="btn btn-secondary btn-sm">60+ Senior</button>
+                <button type="button" onclick="setAgePreset(0,0)"   class="btn btn-secondary btn-sm">✕ Clear</button>
+              </div>
+            </div>
+
+            <!-- Live preview -->
+            <div id="ageLimitPreview" style="padding:13px 16px; border-radius:10px; font-size:14px; font-weight:700; background:#e0e7ff; color:#4338ca; display:flex; align-items:center; gap:10px;">
+              📋 No age restriction set — all registered voters can vote
+            </div>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label>Candidates *</label>
+          <div id="candidateList"></div>
+          <button class="btn btn-secondary btn-sm" onclick="addCandidate()" style="margin-top:8px;">+ Add Candidate</button>
+        </div>
+        <button class="btn btn-primary btn-lg" onclick="createElection()">🗳️ Create Election</button>
+      </div>
+    </div>
+
+  </main>
+</div>
+
+<!-- Results Detail Modal -->
+<div id="resultModal" class="modal-overlay hidden">
+  <div class="modal">
+    <div class="modal-header">
+      <h3 id="resultModalTitle">Results</h3>
+      <button class="modal-close" onclick="document.getElementById('resultModal').classList.add('hidden')">✕</button>
+    </div>
+    <div id="resultModalBody"></div>
+  </div>
+</div>
+
+<script>
+let adminData = {};
+let chartInstances = {};
+
+async function init() {
+  const res = await fetch('/api/admin/me');
+  const data = await res.json();
+  if (!data.admin) return window.location.href = '/admin-login';
+  document.getElementById('adminName').textContent = data.admin.name;
+  adminData.admin = data.admin;
+
+  // Default dates
+  const now = new Date();
+  const later = new Date(now.getTime() + 7*24*60*60*1000);
+  document.getElementById('elStart').value = now.toISOString().slice(0,16);
+  document.getElementById('elEnd').value = later.toISOString().slice(0,16);
+  addCandidate(); addCandidate(); addCandidate(); addCandidate();
+
+  loadOverview();
+}
+
+async function logout() {
+  await fetch('/api/admin/logout', { method:'POST' });
+  window.location.href = '/';
+}
+
+function showTab(tab, btn) {
+  document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.sidebar-link').forEach(l => l.classList.remove('active'));
+  document.getElementById(`tab-${tab}`).classList.add('active');
+  if(btn) btn.classList.add('active');
+  if(tab==='results') loadResults();
+  if(tab==='voters') loadVoters();
+  if(tab==='votelog') loadVoteLog();
+  if(tab==='elections') loadElectionsAdmin();
+}
+
+async function loadOverview() {
+  const [statsRes, electionsRes] = await Promise.all([
+    fetch('/api/admin/stats'),
+    fetch('/api/admin/elections')
+  ]);
+  const stats = await statsRes.json();
+  const elections = await electionsRes.json();
+  adminData.stats = stats;
+  adminData.elections = elections;
+
+  document.getElementById('statsGrid').innerHTML = `
+    <div class="stat-card blue"><div class="stat-icon">👥</div><div class="stat-value">${stats.totalVoters}</div><div class="stat-label">Registered Voters</div></div>
+    <div class="stat-card green"><div class="stat-icon">✅</div><div class="stat-value">${stats.totalVotes}</div><div class="stat-label">Total Votes Cast</div></div>
+    <div class="stat-card purple"><div class="stat-icon">🗳️</div><div class="stat-value">${stats.activeElections}</div><div class="stat-label">Active Elections</div></div>
+    <div class="stat-card orange"><div class="stat-icon">📊</div><div class="stat-value">${stats.votersTurnout}%</div><div class="stat-label">Voter Turnout</div></div>
+    <div class="stat-card teal"><div class="stat-icon">📋</div><div class="stat-value">${stats.totalElections}</div><div class="stat-label">Total Elections</div></div>`;
+
+  renderCharts(stats, elections);
+  loadElectionsAdmin();
+}
+
+function renderCharts(stats, elections) {
+  // Destroy old charts
+  Object.values(chartInstances).forEach(c => c.destroy());
+  chartInstances = {};
+
+  // Turnout donut chart
+  const voted = stats.totalVotes > 0 ? Math.min(stats.totalVoters, new Set().size || Math.round(stats.totalVotes * 0.85)) : 0;
+  const notVoted = Math.max(0, stats.totalVoters - Math.round(stats.totalVoters * stats.votersTurnout / 100));
+  const votedCount = Math.round(stats.totalVoters * stats.votersTurnout / 100);
+
+  chartInstances.turnout = new Chart(document.getElementById('turnoutChart'), {
+    type: 'doughnut',
+    data: {
+      labels: ['Voted', 'Not Voted'],
+      datasets: [{ data: [votedCount, Math.max(0, stats.totalVoters - votedCount)], backgroundColor: ['#059669','#e2e8f0'], borderWidth: 0 }]
+    },
+    options: { cutout:'70%', plugins:{ legend:{ position:'bottom' } } }
+  });
+
+  // Votes per election bar
+  if(elections.length) {
+    chartInstances.elections = new Chart(document.getElementById('electionsChart'), {
+      type: 'bar',
+      data: {
+        labels: elections.map(e => e.title.length > 18 ? e.title.slice(0,18)+'…' : e.title),
+        datasets: [{ label:'Votes', data: elections.map(e => e.totalVotes), backgroundColor:'#4f46e5', borderRadius:6 }]
+      },
+      options: { plugins:{ legend:{ display:false } }, scales:{ y:{ beginAtZero:true, ticks:{ stepSize:1 } } } }
+    });
+  }
+}
+
+async function loadElectionsAdmin() {
+  const res = await fetch('/api/admin/elections');
+  const elections = await res.json();
+  adminData.elections = elections;
+  const container = document.getElementById('electionsAdmin');
+
+  if(!elections.length) {
+    container.innerHTML = '<div class="empty-state"><span class="emoji">🗳️</span><h3>No Elections Yet</h3><p>Create your first election!</p></div>';
+    return;
+  }
+
+  container.innerHTML = elections.map(e => {
+    const leader = e.candidates[0];
+    return `
+    <div class="card" style="margin-bottom:16px;">
+      <div style="display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:12px;">
+        <div style="flex:1;">
+          <div style="display:flex; align-items:center; gap:10px; margin-bottom:6px;">
+            <h3>${e.title}</h3>
+            <span class="badge badge-${e.status==='active'?'success':'danger'}">${e.status.toUpperCase()}</span>
+          </div>
+          <p style="font-size:13px; margin-bottom:10px;">${e.description || ''}</p>
+          <div style="display:flex; gap:10px; font-size:13px; color:var(--muted); flex-wrap:wrap; align-items:center;">
+            <span>👥 ${e.candidates.length} candidates</span>
+            <span>🗳️ ${e.totalVotes} votes</span>
+            <span>📅 ${new Date(e.startDate).toLocaleDateString()} – ${new Date(e.endDate).toLocaleDateString()}</span>
+            ${e.totalVotes > 0 ? `<span>🏆 Leading: ${leader.symbol} ${leader.name} (${leader.votes})</span>` : ''}
+            ${(e.minAge > 0 || e.maxAge > 0) ? `
+              <span style="background:#4f46e5; color:white; padding:3px 10px; border-radius:99px; font-weight:700; font-size:12px;">
+                🎂 Age:
+                ${e.minAge > 0 && e.maxAge > 0 ? `${e.minAge}–${e.maxAge} yrs`
+                  : e.minAge > 0 ? `${e.minAge}+ yrs`
+                  : `≤${e.maxAge} yrs`}
+              </span>` : `<span style="background:#f1f5f9; color:#64748b; padding:3px 10px; border-radius:99px; font-size:12px;">🎂 All Ages</span>`}
+          </div>
+        </div>
+      </div>
+      <div style="display:flex; gap:8px; margin-top:14px; flex-wrap:wrap;">
+        <button class="btn btn-secondary btn-sm" onclick="showDetailedResults('${e.id}')">📊 Full Results</button>
+        ${e.status==='active'
+          ? `<button class="btn btn-warning btn-sm" onclick="toggleStatus('${e.id}','closed')">🔒 Close Election</button>`
+          : `<button class="btn btn-success btn-sm" onclick="toggleStatus('${e.id}','active')">🔓 Reopen</button>`}
+        <button class="btn btn-danger btn-sm" onclick="deleteElection('${e.id}')">🗑️ Delete</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+async function loadResults() {
+  const res = await fetch('/api/admin/elections');
+  const elections = await res.json();
+  const container = document.getElementById('resultsContainer');
+
+  container.innerHTML = elections.map(e => {
+    const total = e.totalVotes;
+    const sorted = [...e.candidates].sort((a,b) => b.votes - a.votes);
+    return `
+    <div class="card" style="margin-bottom:20px;">
+      <div class="card-header">
+        <div>
+          <h3>${e.title}</h3>
+          <p style="font-size:13px; margin-top:2px;">Total votes: <strong>${total}</strong> · ${new Date(e.endDate).toLocaleDateString()}</p>
+        </div>
+        <span class="badge badge-${e.status==='active'?'success':'danger'}">${e.status}</span>
+      </div>
+      ${sorted.map((c, i) => {
+        const pct = total ? Math.round((c.votes/total)*100) : 0;
+        const medals = ['🥇','🥈','🥉'];
+        return `
+        <div class="result-bar">
+          <div class="result-bar-header">
+            <span class="result-bar-name">
+              ${i < 3 ? medals[i] : ''} ${c.symbol} ${c.name}
+              <span style="font-size:12px; color:var(--muted);">${c.party}</span>
+            </span>
+            <span class="result-bar-info">${c.votes} votes · <strong style="color:var(--primary);">${pct}%</strong></span>
+          </div>
+          <div class="result-bar-track">
+            <div class="result-bar-fill" style="width:${pct}%; background:${c.color};"></div>
+          </div>
+        </div>`;
+      }).join('')}
+    </div>`;
+  }).join('') || '<div class="empty-state"><span class="emoji">📊</span><h3>No Elections</h3></div>';
+}
+
+async function loadVoters() {
+  const res = await fetch('/api/admin/voters');
+  const voters = await res.json();
+
+  document.getElementById('votersTable').innerHTML = voters.length ? `
+    <div class="table-wrap"><table>
+      <thead><tr><th>Name</th><th>Voter ID</th><th>Date of Birth</th><th>Status</th><th>Voted</th><th>Registered</th><th>Action</th></tr></thead>
+      <tbody>${voters.map(v => `
+        <tr>
+          <td><strong>${v.name}</strong></td>
+          <td style="font-family:monospace; font-weight:700;">${v.voterId}</td>
+          <td>${v.dob || '—'}</td>
+          <td><span class="badge badge-${v.status==='active'?'success':'danger'}">${v.status}</span></td>
+          <td>${v.hasVoted ? '<span class="badge badge-primary">✅ Voted</span>' : '<span class="badge badge-gray">⏳ Pending</span>'}</td>
+          <td style="font-size:13px;">${new Date(v.registeredAt).toLocaleDateString()}</td>
+          <td><button class="btn btn-danger btn-sm" onclick="deleteVoter('${v.id}','${v.name}')">Remove</button></td>
+        </tr>`).join('')}
+      </tbody>
+    </table></div>` :
+    '<div class="empty-state"><span class="emoji">👥</span><h3>No Registered Voters</h3></div>';
+}
+
+async function loadVoteLog() {
+  const res = await fetch('/api/admin/votes');
+  const votes = await res.json();
+
+  document.getElementById('voteLogTable').innerHTML = votes.length ? `
+    <div class="table-wrap"><table>
+      <thead><tr><th>#</th><th>Voter Name</th><th>Election</th><th>Voted For</th><th>Date & Time</th></tr></thead>
+      <tbody>${votes.map((v, i) => `
+        <tr>
+          <td style="color:var(--muted); font-size:12px;">${votes.length - i}</td>
+          <td><strong>${v.voterName || '—'}</strong></td>
+          <td>${v.electionTitle || '—'}</td>
+          <td><span class="badge badge-primary">${v.candidateName || '—'}</span></td>
+          <td style="font-size:13px;">${new Date(v.votedAt).toLocaleString()}</td>
+        </tr>`).join('')}
+      </tbody>
+    </table></div>` :
+    '<div class="empty-state"><span class="emoji">📋</span><h3>No Votes Cast Yet</h3></div>';
+}
+
+async function showDetailedResults(electionId) {
+  const res = await fetch('/api/admin/elections');
+  const elections = await res.json();
+  const e = elections.find(el => el.id === electionId);
+  const total = e.totalVotes;
+  const sorted = [...e.candidates].sort((a,b) => b.votes - a.votes);
+
+  document.getElementById('resultModalTitle').textContent = e.title;
+  document.getElementById('resultModalBody').innerHTML = `
+    <p style="margin-bottom:16px; color:var(--muted);">Total votes: <strong>${total}</strong></p>
+    ${sorted.map((c, i) => {
+      const pct = total ? Math.round((c.votes/total)*100) : 0;
+      const medals = ['🥇','🥈','🥉'];
+      return `
+      <div class="result-bar" style="margin-bottom:16px;">
+        <div class="result-bar-header">
+          <span class="result-bar-name" style="font-size:15px;">${medals[i]||''} ${c.symbol} ${c.name}</span>
+          <div style="text-align:right;">
+            <div style="font-weight:800; color:${c.color}; font-size:1.1rem;">${pct}%</div>
+            <div style="font-size:12px; color:var(--muted);">${c.votes} votes</div>
+          </div>
+        </div>
+        <div class="result-bar-track" style="height:14px;">
+          <div class="result-bar-fill" style="width:${pct}%; background:${c.color};"></div>
+        </div>
+        <div style="font-size:12px; color:var(--muted); margin-top:4px;">${c.party}</div>
+      </div>`;
+    }).join('')}`;
+  document.getElementById('resultModal').classList.remove('hidden');
+}
+
+async function toggleStatus(id, status) {
+  if(!confirm(`Are you sure you want to ${status==='active'?'reopen':'close'} this election?`)) return;
+  await fetch(`/api/admin/elections/${id}/status`, { method:'PUT', headers:{'Content-Type':'application/json'}, body: JSON.stringify({status}) });
+  loadOverview(); loadElectionsAdmin();
+}
+
+async function deleteElection(id) {
+  if(!confirm('Delete this election? This cannot be undone.')) return;
+  await fetch(`/api/admin/elections/${id}`, { method:'DELETE' });
+  loadOverview(); loadElectionsAdmin();
+}
+
+async function deleteVoter(id, name) {
+  if(!confirm(`Remove voter "${name}"? This cannot be undone.`)) return;
+  await fetch(`/api/admin/voters/${id}`, { method:'DELETE' });
+  loadVoters();
+}
+
+// ── Age Limit Toggle ──
+function toggleAgeLimit() {
+  const enabled = document.getElementById('enableAgeLimit').checked;
+  const fields  = document.getElementById('ageLimitFields');
+  const track   = document.getElementById('toggleTrack');
+  const thumb   = document.getElementById('toggleThumb');
+  const label   = document.getElementById('ageLimitToggleLabel');
+
+  fields.style.display = enabled ? 'block' : 'none';
+  track.style.background = enabled ? '#4f46e5' : '#cbd5e1';
+  thumb.style.left = enabled ? '22px' : '2px';
+  label.textContent = enabled ? 'ON' : 'OFF';
+  label.style.color = enabled ? '#4f46e5' : 'var(--muted)';
+
+  if (enabled) updateAgeLimitPreview();
+}
+
+function updateAgeLimitPreview() {
+  const min = parseInt(document.getElementById('elMinAge').value) || 0;
+  const max = parseInt(document.getElementById('elMaxAge').value) || 0;
+  const preview = document.getElementById('ageLimitPreview');
+
+  if (min > 0 && max > 0) {
+    preview.innerHTML = `🎂 Voters must be aged <strong>${min} – ${max} years</strong>`;
+    preview.style.background = '#e0e7ff'; preview.style.color = '#4338ca';
+  } else if (min > 0) {
+    preview.innerHTML = `🎂 Voters must be <strong>${min} years or older</strong>`;
+    preview.style.background = '#dcfce7'; preview.style.color = '#15803d';
+  } else if (max > 0) {
+    preview.innerHTML = `🎂 Voters must be <strong>${max} years old or younger</strong>`;
+    preview.style.background = '#fef3c7'; preview.style.color = '#a16207';
+  } else {
+    preview.innerHTML = `📋 <strong>No age restriction</strong> — all ages can vote`;
+    preview.style.background = '#f1f5f9'; preview.style.color = '#64748b';
+  }
+}
+
+function stepAge(id, delta) {
+  const el  = document.getElementById(id);
+  const val = (parseInt(el.value) || 0) + delta;
+  el.value  = Math.max(0, Math.min(120, val));
+  updateAgeLimitPreview();
+}
+
+function setAgePreset(min, max) {
+  document.getElementById('elMinAge').value = min;
+  document.getElementById('elMaxAge').value = max;
+  updateAgeLimitPreview();
+}
+
+// ── Create Election ──
+function addCandidate() {
+  const div = document.createElement('div');
+  div.style.cssText = 'display:flex; gap:8px; align-items:center; background:var(--bg); padding:10px; border-radius:8px; margin-bottom:8px;';
+  div.innerHTML = `
+    <input type="text" placeholder="Symbol (e.g. 🌟)" class="c-sym" style="width:60px; padding:8px; border:1px solid var(--border); border-radius:6px; font-size:18px; text-align:center;"/>
+    <input type="text" placeholder="Full Name *" class="c-name" style="flex:1; padding:8px 10px; border:1px solid var(--border); border-radius:6px; font-size:13px;"/>
+    <input type="text" placeholder="Party Name" class="c-party" style="flex:1; padding:8px 10px; border:1px solid var(--border); border-radius:6px; font-size:13px;"/>
+    <button onclick="this.parentElement.remove()" style="background:none; border:none; color:var(--danger); font-size:18px; cursor:pointer; padding:4px;">✕</button>`;
+  document.getElementById('candidateList').appendChild(div);
+}
+
+async function createElection() {
+  const title       = document.getElementById('elTitle').value.trim();
+  const description = document.getElementById('elDesc').value.trim();
+  const startDate   = document.getElementById('elStart').value;
+  const endDate     = document.getElementById('elEnd').value;
+  const ageEnabled  = document.getElementById('enableAgeLimit').checked;
+  const minAge      = ageEnabled ? (parseInt(document.getElementById('elMinAge').value) || 0) : 0;
+  const maxAge      = ageEnabled ? (parseInt(document.getElementById('elMaxAge').value) || 0) : 0;
+
+  const items = document.querySelectorAll('#candidateList > div');
+  const candidates = [];
+  items.forEach(item => {
+    const name   = item.querySelector('.c-name').value.trim();
+    const symbol = item.querySelector('.c-sym').value.trim() || '🔵';
+    const party  = item.querySelector('.c-party').value.trim() || 'Independent';
+    if(name) candidates.push({ name, symbol, party });
+  });
+
+  const alertEl = document.getElementById('createAlert');
+  if(!title) return alertEl.innerHTML = '<div class="alert alert-danger">Election title is required.</div>';
+  if(!startDate || !endDate) return alertEl.innerHTML = '<div class="alert alert-danger">Start and end dates are required.</div>';
+  if(candidates.length < 2) return alertEl.innerHTML = '<div class="alert alert-danger">At least 2 candidates required.</div>';
+  if(ageEnabled && minAge > 0 && maxAge > 0 && minAge >= maxAge)
+    return alertEl.innerHTML = '<div class="alert alert-danger">Minimum age must be less than maximum age.</div>';
+
+  const btn = document.querySelector('#tab-create .btn-primary');
+  btn.disabled = true; btn.innerHTML = '<span class="spinner"></span> Creating...';
+
+  try {
+    const res = await fetch('/api/admin/elections', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ title, description, startDate, endDate, candidates, minAge, maxAge })
+    });
+    const data = await res.json();
+    if(!res.ok) throw new Error(data.error);
+    alertEl.innerHTML = '<div class="alert alert-success">✅ Election created successfully!</div>';
+    document.getElementById('elTitle').value = '';
+    document.getElementById('elDesc').value  = '';
+    document.getElementById('enableAgeLimit').checked = false;
+    document.getElementById('toggleTrack').style.background = '#cbd5e1';
+    document.getElementById('toggleThumb').style.left = '2px';
+    document.getElementById('ageLimitToggleLabel').textContent = 'OFF';
+    document.getElementById('ageLimitToggleLabel').style.color = 'var(--muted)';
+    document.getElementById('ageLimitFields').style.display = 'none';
+    document.getElementById('elMinAge').value = 18;
+    document.getElementById('elMaxAge').value = 0;
+    document.getElementById('candidateList').innerHTML = '';
+    addCandidate(); addCandidate(); addCandidate(); addCandidate();
+    loadOverview();
+  } catch(e) {
+    alertEl.innerHTML = `<div class="alert alert-danger">❌ ${e.message}</div>`;
+  }
+  btn.disabled = false; btn.innerHTML = '🗳️ Create Election';
+}
+
+init();
+// Auto-refresh overview every 30s
+setInterval(() => {
+  if(document.getElementById('tab-overview').classList.contains('active')) loadOverview();
+  if(document.getElementById('tab-results').classList.contains('active')) loadResults();
+}, 30000);
+</script>
+</body>
+</html>
