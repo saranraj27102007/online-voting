@@ -2,59 +2,112 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8"/>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
   <title>Admin Login — VoteSecure</title>
   <link rel="stylesheet" href="/css/style.css"/>
+  <style>
+    .lock-box{background:#fef2f2;border:2px solid #fca5a5;border-radius:14px;padding:16px;text-align:center;margin-bottom:14px;}
+    .lock-count{font-size:12px;color:#9ca3af;margin-top:8px;text-align:center;}
+    .attempt-dots{display:flex;gap:6px;justify-content:center;margin-top:8px;}
+    .attempt-dot{width:12px;height:12px;border-radius:50%;background:#e2e8f0;}
+    .attempt-dot.used{background:#ef4444;}
+  </style>
 </head>
 <body>
-<div class="auth-page" style="background: linear-gradient(135deg, #0f172a, #1e293b);">
+<div class="auth-page" style="background:linear-gradient(135deg,#0f172a,#1e293b);">
   <div class="auth-card" style="max-width:420px;">
     <div class="auth-header">
       <span class="icon">⚙️</span>
       <h1>Admin Login</h1>
       <p>Authorized administrators only</p>
     </div>
+
+    <!-- Security notice -->
+    <div style="background:#1e293b;border:1px solid rgba(255,255,255,.1);border-radius:10px;padding:10px 14px;margin-bottom:16px;font-size:12px;color:#94a3b8;">
+      🔒 <strong style="color:#e2e8f0;">Protected:</strong> 5 failed attempts = 15-minute lockout. All attempts are logged.
+    </div>
+
     <div id="alert"></div>
-    <div class="form-group">
-      <label>Username</label>
-      <input type="text" id="username" class="form-control" placeholder="Enter username" autocomplete="username"/>
+
+    <div id="loginForm">
+      <!-- Attempt indicator -->
+      <div id="attemptWrap" style="display:none;margin-bottom:12px;">
+        <div class="attempt-dots" id="attemptDots">
+          <div class="attempt-dot" id="dot0"></div>
+          <div class="attempt-dot" id="dot1"></div>
+          <div class="attempt-dot" id="dot2"></div>
+          <div class="attempt-dot" id="dot3"></div>
+          <div class="attempt-dot" id="dot4"></div>
+        </div>
+        <div class="lock-count" id="attemptTxt"></div>
+      </div>
+
+      <div class="form-group">
+        <label>Username</label>
+        <input type="text" id="username" class="form-control" placeholder="Enter username" autocomplete="username"/>
+      </div>
+      <div class="form-group">
+        <label>Password</label>
+        <input type="password" id="password" class="form-control" placeholder="Enter password" autocomplete="current-password"/>
+      </div>
+      <button class="btn btn-primary btn-block btn-lg" id="loginBtn" onclick="doLogin()">Login to Admin Panel</button>
     </div>
-    <div class="form-group">
-      <label>Password</label>
-      <input type="password" id="password" class="form-control" placeholder="Enter password" autocomplete="current-password"/>
-    </div>
-    <button class="btn btn-primary btn-block btn-lg" onclick="login()">Login to Admin Panel</button>
-    <div style="text-align:center; margin-top:16px;">
-      <a href="/" style="font-size:13px; color:var(--muted);">← Back to Home</a>
+
+    <div style="text-align:center;margin-top:16px;">
+      <a href="/" style="font-size:13px;color:var(--muted);">← Back to Home</a>
     </div>
   </div>
 </div>
 <script>
-  fetch('/api/admin/me').then(r=>r.json()).then(d => { if(d.admin) window.location.href='/admin'; });
+  var failCount = 0;
 
-  async function login() {
-    const username = document.getElementById('username').value.trim();
-    const password = document.getElementById('password').value;
-    if (!username || !password) {
-      document.getElementById('alert').innerHTML = '<div class="alert alert-danger">All fields required.</div>';
-      return;
+  // Redirect if already logged in
+  fetch('/api/admin/me').then(r=>r.json()).then(d=>{ if(d.admin) window.location.href='/admin'; });
+
+  // If redirected due to auth
+  if(location.search.includes('auth=required')){
+    document.getElementById('alert').innerHTML='<div class="alert alert-warning">⚠️ Admin login required to access that page.</div>';
+  }
+
+  function markFail(){
+    failCount++;
+    var wrap=document.getElementById('attemptWrap');wrap.style.display='block';
+    for(var i=0;i<5;i++){
+      var d=document.getElementById('dot'+i);
+      if(d) d.className='attempt-dot'+(i<failCount?' used':'');
     }
-    const btn = document.querySelector('.btn-primary');
-    btn.disabled = true; btn.innerHTML = '<span class="spinner"></span> Logging in...';
-    try {
-      const res = await fetch('/api/admin/login', {
-        method: 'POST', headers: {'Content-Type':'application/json'},
-        body: JSON.stringify({ username, password })
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error);
-      window.location.href = '/admin';
-    } catch(e) {
-      document.getElementById('alert').innerHTML = `<div class="alert alert-danger">❌ ${e.message}</div>`;
-      btn.disabled = false; btn.innerHTML = 'Login to Admin Panel';
+    var rem=5-failCount;
+    document.getElementById('attemptTxt').textContent=rem>0
+      ?'⚠️ '+rem+' attempt'+(rem===1?'':'s')+' remaining before 15-minute lockout'
+      :'🔒 Account locked. Wait 15 minutes.';
+  }
+
+  async function doLogin(){
+    var uname=document.getElementById('username').value.trim();
+    var pwd  =document.getElementById('password').value;
+    if(!uname||!pwd){ document.getElementById('alert').innerHTML='<div class="alert alert-danger">All fields required.</div>';return;}
+    var btn=document.getElementById('loginBtn');
+    btn.disabled=true;btn.innerHTML='<span class="spinner"></span> Logging in…';
+    document.getElementById('alert').innerHTML='';
+    try{
+      var res=await fetch('/api/admin/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username:uname,password:pwd})});
+      var data=await res.json();
+      if(!res.ok) throw new Error(data.error);
+      window.location.href='/admin';
+    }catch(e){
+      var msg=e.message||'Login failed.';
+      var isLocked=msg.toLowerCase().includes('lock')||msg.toLowerCase().includes('wait');
+      if(isLocked){
+        document.getElementById('alert').innerHTML='<div class="lock-box"><div style="font-size:2rem;">🔒</div><div style="font-weight:800;color:#b91c1c;margin-top:8px;">Account Locked</div><div style="font-size:13px;color:#64748b;margin-top:4px;">'+msg+'</div></div>';
+        document.getElementById('loginBtn').disabled=true;
+      }else{
+        markFail();
+        document.getElementById('alert').innerHTML='<div class="alert alert-danger">❌ '+msg+'</div>';
+        btn.disabled=false;btn.innerHTML='Login to Admin Panel';
+      }
     }
   }
-  document.addEventListener('keydown', e => { if(e.key==='Enter') login(); });
+  document.addEventListener('keydown',function(e){if(e.key==='Enter')doLogin();});
 </script>
 </body>
 </html>
