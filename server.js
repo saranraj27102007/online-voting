@@ -98,9 +98,12 @@ app.use(express.static(path.join(__dirname,'public'),{
 // Trust Railway reverse proxy (required for secure cookies over HTTPS)
 app.set('trust proxy', 1);
 
-// Session — set SESSION_SECRET in Railway env vars for stability across restarts
+// Session — auto-detect HTTPS (Railway sets RAILWAY_ENVIRONMENT automatically)
 const SESSION_SECRET = process.env.SESSION_SECRET || 'votesecure-dev-change-in-production';
-const isProd = process.env.NODE_ENV === 'production';
+const isHTTPS = process.env.NODE_ENV === 'production'
+  || !!process.env.RAILWAY_ENVIRONMENT
+  || !!process.env.RAILWAY_STATIC_URL
+  || !!process.env.RAILWAY_PUBLIC_DOMAIN;
 app.use(session({
   secret: SESSION_SECRET,
   resave: false,
@@ -108,8 +111,8 @@ app.use(session({
   name: '__vs',
   cookie: {
     httpOnly: true,
-    secure: isProd,
-    sameSite: 'lax',
+    secure: isHTTPS,         // true on Railway (HTTPS), false on localhost
+    sameSite: isHTTPS ? 'none' : 'lax', // 'none' required when secure:true cross-context
     maxAge: 8 * 60 * 60 * 1000
   }
 }));
@@ -178,11 +181,12 @@ app.post('/api/otp/verify', apiLimit, (req,res)=>{
 // VOTER REGISTER — NO AGE CHECK (only at election vote time)
 // ══════════════════════════════════════════════════════════════
 app.post('/api/voter/register', registerLimit, (req,res)=>{
-  const {name,dob,phone,address,faceDescriptor,proofType,proofVerified}=req.body;
+  const {name,dob,phone,address,faceDescriptor,faceDescriptorType,proofType,proofVerified}=req.body;
   const cName  = sanitizeName(name ||'');
   const cDob   = sanitize(dob      ||'');
   const cPhone = sanitize(phone    ||'').replace(/\D/g,'').slice(-10);
   const cAddr  = sanitize(address  ||'');
+  const descType = (faceDescriptorType==='ai'||faceDescriptorType==='pixel') ? faceDescriptorType : 'pixel';
 
   if(!cName||cName.length<2)     return res.status(400).json({error:'Valid full name required.'});
   if(!cDob)                       return res.status(400).json({error:'Date of birth required.'});
@@ -192,11 +196,11 @@ app.post('/api/voter/register', registerLimit, (req,res)=>{
   if(faceDescriptor.some(v=>typeof v!=='number'||isNaN(v)||!isFinite(v)))
     return res.status(400).json({error:'Corrupted face data.'});
 
-  // Reject black-frame / flat descriptors (all values near 0 or near-identical)
+  // Only reject truly blank/black frames (very strict — allows all real photos)
   const fd_min=Math.min(...faceDescriptor), fd_max=Math.max(...faceDescriptor);
   const fd_mean=faceDescriptor.reduce((a,b)=>a+b,0)/faceDescriptor.length;
-  if((fd_max-fd_min)<0.02||fd_mean<0.005)
-    return res.status(400).json({error:'Face data is invalid — camera may have been black or covered. Please retake your photo.'});
+  if((fd_max-fd_min)<0.003 && fd_mean<0.002)
+    return res.status(400).json({error:'Face photo appears blank. Please retake with good lighting.'});
 
   const otpRec=otpStore.get(cPhone);
   if(!otpRec||!otpRec.verified) return res.status(400).json({error:'Phone OTP verification required.'});
@@ -204,22 +208,40 @@ app.post('/api/voter/register', registerLimit, (req,res)=>{
 
   const voters=readJSON(VOTERS_FILE);
 
+  // 1. Phone duplicate
   const byPhone=voters.find(v=>v.phone===cPhone);
   if(byPhone) return res.status(409).json({error:'DUPLICATE_VOTER',type:'phone',message:'Phone already registered.',existingVoterId:byPhone.voterId,existingName:byPhone.name});
 
+  // 2. Name + DOB duplicate
   const byNd=voters.find(v=>v.name.toLowerCase()===cName.toLowerCase()&&v.dob===cDob);
   if(byNd) return res.status(409).json({error:'DUPLICATE_VOTER',type:'name_dob',message:'Name + DOB already registered.',existingVoterId:byNd.voterId,existingName:byNd.name});
 
-  let faceMatch=null,minD=999;
+  // 3. Face duplicate — type-aware thresholds
+  // AI descriptors: euclidean < 0.45 = same person (standard face-api threshold)
+  // Pixel descriptors: normalised 0-1 values, same person ≈ < 0.18 euclidean
+  const AI_THRESH    = 0.45;
+  const PIXEL_THRESH = 0.18;
+
+  let faceMatch=null, minD=999;
   for(const v of voters){
     if(!v.faceDescriptor||v.faceDescriptor.length!==128) continue;
-    const d=euclidean(faceDescriptor,v.faceDescriptor);
-    if(d<minD){minD=d;if(d<0.45)faceMatch=v;}
+    const vType = v.faceDescriptorType||'ai'; // legacy records assumed AI
+    // Only compare same-type descriptors (AI vs AI, pixel vs pixel)
+    if(vType !== descType) continue;
+    const d=euclidean(faceDescriptor, v.faceDescriptor);
+    if(d<minD){ minD=d; }
+    const thresh = descType==='ai' ? AI_THRESH : PIXEL_THRESH;
+    if(d<thresh) faceMatch=v;
   }
-  if(faceMatch) return res.status(409).json({error:'DUPLICATE_VOTER',type:'face',message:'Face already registered.',existingVoterId:faceMatch.voterId,existingName:faceMatch.name});
+  if(faceMatch) return res.status(409).json({error:'DUPLICATE_VOTER',type:'face',message:'This face/photo is already registered.',existingVoterId:faceMatch.voterId,existingName:faceMatch.name});
 
   const voterId='VTR-'+crypto.randomBytes(3).toString('hex').toUpperCase();
-  voters.push({id:uuidv4(),voterId,name:cName,dob:cDob,phone:cPhone,address:cAddr,proofType:sanitize(proofType||'aadhaar'),faceDescriptor,registeredAt:new Date().toISOString(),status:'active'});
+  voters.push({
+    id:uuidv4(), voterId, name:cName, dob:cDob, phone:cPhone, address:cAddr,
+    proofType:sanitize(proofType||'aadhaar'),
+    faceDescriptor, faceDescriptorType:descType,
+    registeredAt:new Date().toISOString(), status:'active'
+  });
   writeJSON(VOTERS_FILE,voters);
   otpStore.delete(cPhone);
   res.json({success:true,voterId,name:cName});

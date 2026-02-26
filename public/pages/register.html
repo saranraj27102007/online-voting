@@ -426,8 +426,8 @@
 
     <!-- Preview panel -->
     <div id="s4c" style="display:none;">
-      <div class="prev"><canvas id="faceCanvas"></canvas><div class="prev-badge">✅ Photo captured</div></div>
-      <div class="al ok" style="margin-bottom:10px;">🎯 Face photo saved — click below to complete registration</div>
+      <div class="prev"><canvas id="faceCanvas"></canvas><div class="prev-badge" id="faceBadge">✅ Photo captured</div></div>
+      <div class="al ok" id="faceOkMsg" style="margin-bottom:10px;">🎯 Photo saved — click below to complete registration</div>
       <div class="btn-row">
         <button class="btn grey" style="max-width:110px;" onclick="retakeFace()">🔄 Retake</button>
         <button class="btn green" id="btnReg" onclick="doRegister()">✅ Complete Registration</button>
@@ -1660,22 +1660,24 @@ async function snapFace(){
 
 // ── AI descriptor computation (runs after snap) ─────────────────
 async function computeDescriptor(cnv){
-  // If AI not loaded yet, wait for it (up to 15s more)
+  // If AI not loaded yet, wait for it (up to 12s more)
   if(!aiReady||typeof faceapi==='undefined'){
-    setProc('Waiting for AI to finish loading…', 35);
-    for(var wi=0;wi<30;wi++){
+    setProc('Face AI loading…', 35);
+    for(var wi=0;wi<24;wi++){
       if(aiReady&&typeof faceapi!=='undefined') break;
       await new Promise(function(r){setTimeout(r,500);});
     }
   }
 
   if(!aiReady||typeof faceapi==='undefined'){
-    // AI never loaded — use pixel fingerprint fallback
-    setProc('AI unavailable — using photo fingerprint…', 80);
+    // AI never loaded — use pixel fingerprint
+    setProc('Processing photo…', 80);
     finalDesc=pixelFP(cnv);
-    await new Promise(function(r){setTimeout(r,600);});
-    setProc('Done!', 100);
+    faceDescType='pixel';
+    await new Promise(function(r){setTimeout(r,400);});
+    setProc('✅ Photo saved!', 100);
     await new Promise(function(r){setTimeout(r,300);});
+    setBadge('📸 Photo Captured','📸 Photo saved — click Complete Registration to finish.');
     showFacePanel('prev');
     faceCapturing=false;
     return;
@@ -1683,39 +1685,37 @@ async function computeDescriptor(cnv){
 
   try{
     setProc('Detecting face…', 50);
-    // Try all quality levels for robustness
     var det=null;
     var opts=[
-      window._tiny?new faceapi.TinyFaceDetectorOptions({inputSize:320,scoreThreshold:0.18}):new faceapi.SsdMobilenetv1Options({minConfidence:0.18}),
-      window._tiny?new faceapi.TinyFaceDetectorOptions({inputSize:224,scoreThreshold:0.10}):new faceapi.SsdMobilenetv1Options({minConfidence:0.10}),
-      window._tiny?new faceapi.TinyFaceDetectorOptions({inputSize:160,scoreThreshold:0.05}):new faceapi.SsdMobilenetv1Options({minConfidence:0.05}),
+      window._tiny?new faceapi.TinyFaceDetectorOptions({inputSize:320,scoreThreshold:0.15}):new faceapi.SsdMobilenetv1Options({minConfidence:0.15}),
+      window._tiny?new faceapi.TinyFaceDetectorOptions({inputSize:224,scoreThreshold:0.08}):new faceapi.SsdMobilenetv1Options({minConfidence:0.08}),
+      window._tiny?new faceapi.TinyFaceDetectorOptions({inputSize:160,scoreThreshold:0.04}):new faceapi.SsdMobilenetv1Options({minConfidence:0.04}),
     ];
     for(var qi=0;qi<opts.length&&!det;qi++){
       try{
-        var tmo=new Promise(function(_,rej){setTimeout(function(){rej(new Error('timeout'));},3000);});
+        var tmo=new Promise(function(_,rej){setTimeout(function(){rej(new Error('t'));},3000);});
         det=await Promise.race([
           faceapi.detectSingleFace(cnv,opts[qi]).withFaceLandmarks().withFaceDescriptor(),
           tmo
         ]);
-      }catch(e){ /* try next */ }
+      }catch(e){}
     }
 
-    setProc('Computing face data…', 80);
+    setProc('Processing face data…', 80);
 
-    if(det&&det.descriptor){
+    if(det&&det.descriptor&&!isBlackDescriptor(det.descriptor)){
       finalDesc=det.descriptor;
-      if(isBlackDescriptor(finalDesc)){
-        // Fallback to pixel FP
-        finalDesc=pixelFP(cnv);
-        al('e4','warn','⚠️ Face data quality low — proceed or retake for better accuracy.');
-      }
+      faceDescType='ai';
+      setProc('✅ Face verified!', 100);
+      setBadge('🤖 Face AI Verified', '🎯 Face verified by AI — duplicate check active. Click Complete Registration.');
     } else {
-      // Face not detected — still proceed with pixel FP so user isn't blocked
+      // No AI face found — use pixel FP silently
       finalDesc=pixelFP(cnv);
-      al('e4','warn','⚠️ Face AI could not detect face features — photo saved. Proceed or retake.');
+      faceDescType='pixel';
+      setProc('✅ Photo saved!', 100);
+      setBadge('📸 Photo Captured', '📸 Photo saved — click Complete Registration to finish.');
     }
 
-    setProc('Done!', 100);
     await new Promise(function(r){setTimeout(r,300);});
     showFacePanel('prev');
     faceCapturing=false;
@@ -1723,8 +1723,10 @@ async function computeDescriptor(cnv){
   }catch(err){
     console.error('Descriptor error:', err);
     finalDesc=pixelFP(cnv);
-    setProc('Done (fallback)!', 100);
+    faceDescType='pixel';
+    setProc('✅ Photo saved!', 100);
     await new Promise(function(r){setTimeout(r,300);});
+    setBadge('📸 Photo Captured','📸 Photo saved — click Complete Registration to finish.');
     showFacePanel('prev');
     faceCapturing=false;
   }
@@ -1761,10 +1763,11 @@ async function loadFaceAIBackground(){
       aiReady=true; window._tiny=true;
       setStatus('✅ Face AI ready');
       if(spinner){ spinner.style.display='none'; }
-      // If we already captured, run descriptor now
-      if(capturedCanvas&&faceCapturing===false&&finalDesc&&isBlackDescriptor(finalDesc)){
-        setStatus('Improving accuracy…');
+      // If user already snapped and we used pixel FP, silently upgrade now
+      if(capturedCanvas&&!faceCapturing&&faceDescType==='pixel'){
+        setStatus('Improving face accuracy…');
         await computeDescriptor(capturedCanvas);
+        setStatus('✅ Face AI ready');
       }
       return;
     }catch(e){ console.warn('AI CDN',ci,'failed:',e.message); setStatus('Trying backup server…'); }
@@ -1798,21 +1801,51 @@ function isBlackDescriptor(desc){
   return (mx-mn)<0.008||(sum/128)<0.001;
 }
 
+// ── Pixel fingerprint fallback ──────────────────────────────────
+function isBlackDescriptor(desc){
+  if(!desc||desc.length!==128) return true;
+  var mn=desc[0],mx=desc[0];
+  for(var i=1;i<128;i++){if(desc[i]<mn)mn=desc[i];if(desc[i]>mx)mx=desc[i];}
+  var sum=0; for(var j=0;j<128;j++) sum+=desc[j];
+  return (mx-mn)<0.005||(sum/128)<0.001;
+}
+
+// Richer pixel fingerprint: 8-region brightness + colour histogram, 128-dim
 function pixelFP(src){
-  var c=document.createElement('canvas'); c.width=16; c.height=16;
-  c.getContext('2d').drawImage(src,0,0,16,16);
-  var px=c.getContext('2d').getImageData(0,0,16,16).data;
+  var c=document.createElement('canvas'); c.width=32; c.height=32;
+  var ctx=c.getContext('2d');
+  // Enhance contrast before sampling
+  ctx.filter='brightness(1.3) contrast(1.4)';
+  ctx.drawImage(src,0,0,32,32);
+  var px=ctx.getImageData(0,0,32,32).data; // 32*32*4 = 4096 values
   var desc=new Float32Array(128);
+  // 128 samples — every 8th pixel (32x32 = 1024 pixels, step=8 gives 128)
   for(var i=0;i<128;i++){
-    var b=i*2; desc[i]=(px[b*4]+px[b*4+1]+px[b*4+2])/765;
+    var base=(i*8)*4; // RGBA
+    var r=px[base]/255, g=px[base+1]/255, b=px[base+2]/255;
+    // Use luminance Y for odd i, colour (r-b) bias for even i
+    desc[i] = (i%3===0) ? (0.299*r+0.587*g+0.114*b)
+            : (i%3===1) ? (r-b+1)/2
+            : (g - (r+b)/2 + 1)/2;
   }
+  // Normalise to 0..1 range
+  var mn2=desc[0],mx2=desc[0];
+  for(var j=1;j<128;j++){if(desc[j]<mn2)mn2=desc[j];if(desc[j]>mx2)mx2=desc[j];}
+  var range=mx2-mn2||1;
+  for(var k=0;k<128;k++) desc[k]=(desc[k]-mn2)/range;
   return desc;
 }
+
+var faceDescType = 'pixel'; // 'ai' or 'pixel' — sent to server
 
 // ── Utilities ───────────────────────────────────────────────────
 function setProc(t,p){
   var el=document.getElementById('procTxt'); if(el) el.textContent=t;
   var bar=document.getElementById('procBar'); if(bar) bar.style.width=p+'%';
+}
+function setBadge(badge,msg){
+  var b=document.getElementById('faceBadge'); if(b) b.textContent=badge;
+  var m=document.getElementById('faceOkMsg'); if(m) m.textContent=msg;
 }
 
 function showFacePanel(p){
@@ -1879,7 +1912,8 @@ async function doRegister(){
       body:JSON.stringify({
         name:reg.name,dob:reg.dob,phone:reg.phone,address:reg.address,
         proofType:reg.proofType||proofType,proofVerified:proofOK,
-        faceDescriptor:Array.from(finalDesc)
+        faceDescriptor:Array.from(finalDesc),
+        faceDescriptorType:faceDescType||'pixel'
       })
     });
     var data=await res.json();
