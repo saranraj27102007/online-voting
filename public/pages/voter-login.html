@@ -171,66 +171,36 @@
 </div>
 
 <script>
-// ════════════════════════════════════════════════════════════
-// ADVANCED FACE VERIFICATION
-// - SSD MobileNet = much better accuracy
-// - LIVE real-time match score shown in camera
-// - Auto-verify when confidence ≥ threshold
-// - Multi-attempt with adaptive thresholds
-// - Low-light auto-enhancement
-// ════════════════════════════════════════════════════════════
-
 const $  = id => document.getElementById(id);
-let stream       = null;
-let detectTimer  = null;
-let fallTimer    = null;
-let modelsOK     = false;
-let voterInfo    = null;
-let storedDesc   = null;   // Float32Array from DB
-let lux          = 150;
-let facingMode   = 'user';
-let boost        = false;
-let verifying    = false;
-let autoVerified = false;
-
-// Rolling buffer of last 5 live descriptors for stability
-let liveDescBuffer = [];
+let stream=null, detectTimer=null, fallTimer=null;
+let modelsOK=false, voterInfo=null, storedDesc=null;
+let lux=150, facingMode='user', boost=false;
+let verifying=false, autoVerified=false;
+let liveDescBuffer=[];
 
 const CDN  = 'https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/weights';
 const CDN2 = 'https://raw.githubusercontent.com/justadudewhohacks/face-api.js/master/weights';
 
-// ── Step 1: find voter ────────────────────────────────────────────────────────
+// ── Step 1: find voter ────────────────────────────────────────
 async function findVoter() {
   const raw = $('voteridInput').value.trim().toUpperCase();
-  if (!raw) {
-    $('idAlert').innerHTML = '<div class="msg err">Please enter your Voter ID.</div>';
-    return;
-  }
+  if (!raw) { $('idAlert').innerHTML='<div class="msg err">Please enter your Voter ID.</div>'; return; }
   const btn = $('findBtn');
-  btn.disabled = true;
-  btn.innerHTML = '<span class="spin"></span> Looking up…';
-
+  btn.disabled=true; btn.innerHTML='<span class="spin"></span> Looking up…';
   try {
-    const res  = await fetch('/api/voter/login', {
-      method:'POST', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({ voterId: raw })
-    });
+    const res  = await fetch('/api/voter/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({voterId:raw})});
     const data = await res.json();
     if (!res.ok) throw new Error(data.error);
-
     voterInfo  = data.voter;
     storedDesc = new Float32Array(data.voter.faceDescriptor);
-
     $('voterNameDisplay').textContent = data.voter.name;
     $('voterIdBadge').textContent     = data.voter.voterId;
-
     $('idCard').classList.add('hidden');
     $('faceCard').classList.remove('hidden');
     await startFaceCamera();
-  } catch (e) {
-    $('idAlert').innerHTML = `<div class="msg err">❌ ${e.message}</div>`;
-    btn.disabled = false;
-    btn.innerHTML = 'Continue → Face Scan';
+  } catch(e) {
+    $('idAlert').innerHTML=`<div class="msg err">❌ ${e.message}</div>`;
+    btn.disabled=false; btn.innerHTML='Continue → Face Scan';
   }
 }
 
@@ -238,360 +208,325 @@ function backToId() {
   stopAll();
   $('faceCard').classList.add('hidden');
   $('idCard').classList.remove('hidden');
-  $('findBtn').disabled = false;
-  $('findBtn').innerHTML = 'Continue → Face Scan';
+  $('findBtn').disabled=false;
+  $('findBtn').innerHTML='Continue → Face Scan';
   resetFaceUI();
 }
 
 function resetFaceUI() {
-  $('faceLoad').style.display     = 'block';
-  $('faceCamWrap').style.display  = 'none';
-  $('faceAlert').innerHTML        = '';
-  $('faceLoadTxt').textContent    = 'Initialising…';
-  $('faceLoadBar').style.width    = '5%';
-  $('scoreRingWrap').style.display= 'none';
-  $('manualWarn').style.display   = 'none';
-  $('manualVerifyBtn').style.display = 'none';
-  $('verifyBtn').disabled = true;
+  $('faceLoad').style.display='block';
+  $('faceCamWrap').style.display='none';
+  $('faceAlert').innerHTML='';
+  $('faceLoadTxt').textContent='Initialising…';
+  $('faceLoadBar').style.width='5%';
+  $('scoreRingWrap').style.display='none';
+  $('manualWarn').style.display='none';
+  $('manualVerifyBtn').style.display='none';
+  $('verifyBtn').disabled=true;
   $('successOverlay').classList.add('hidden');
-  autoVerified = false;
-  liveDescBuffer = [];
+  autoVerified=false; liveDescBuffer=[];
 }
 
-// ── Camera ────────────────────────────────────────────────────────────────────
+// ── Camera with resolution cascade (HP webcam support) ────────
 async function startFaceCamera() {
   resetFaceUI();
-  try {
-    stream = await navigator.mediaDevices.getUserMedia({
-      video: {
-        facingMode,
-        width:  { ideal:1280 }, height: { ideal:960 },
-        frameRate: { ideal:30 },
-        advanced: [{ exposureMode:'continuous' },{ whiteBalanceMode:'continuous' }]
-      }
-    }).catch(() =>
-      navigator.mediaDevices.getUserMedia({ video:{ facingMode, width:{ ideal:640 }, height:{ ideal:480 } } })
-    );
-  } catch (e) {
-    $('faceLoad').style.display = 'none';
-    $('faceAlert').innerHTML = '<div class="msg err">📷 Camera blocked. Allow camera in browser settings.</div>';
+  const fallbacks = [
+    {video:{facingMode,width:{ideal:1280},height:{ideal:720},frameRate:{ideal:30}}},
+    {video:{facingMode,width:{ideal:640}, height:{ideal:480}}},
+    {video:{facingMode}},
+    {video:true},
+  ];
+  stream=null;
+  for(const constraint of fallbacks){
+    try{ stream=await navigator.mediaDevices.getUserMedia(constraint); break; }
+    catch(e){ console.warn('Camera attempt failed:',e.message); }
+  }
+  if(!stream){
+    $('faceLoad').style.display='none';
+    $('faceAlert').innerHTML='<div class="msg err">📷 Camera blocked or unavailable. Allow camera access in browser settings.</div>';
     return;
   }
-
-  $('faceVideo').srcObject = stream;
-  $('faceVideo').play();
+  $('faceVideo').srcObject=stream; $('faceVideo').play();
   applyFilter();
-  showFaceLoad('Camera ready. Loading AI…', 20);
+  showFaceLoad('Camera ready. Loading AI…',20);
+
+  // Auto-fix black screen after 2.5s
+  setTimeout(async()=>{
+    if(!stream) return;
+    const lm=quickLum($('faceVideo'));
+    if(lm<5){
+      stopDetection(); if(stream){stream.getTracks().forEach(t=>t.stop());stream=null;}
+      try{ stream=await navigator.mediaDevices.getUserMedia({video:true}); $('faceVideo').srcObject=stream; $('faceVideo').play(); applyFilter(); }
+      catch(e){ $('faceAlert').innerHTML='<div class="msg err">Camera is black. Close other apps using the camera.</div>'; }
+    }
+  },2500);
+
   await loadModels();
 }
 
-function applyFilter() {
-  $('faceVideo').style.filter = boost
-    ? 'brightness(2.0) contrast(1.5) saturate(1.1)'
-    : 'brightness(1.4) contrast(1.2)';
+function applyFilter(){
+  $('faceVideo').style.filter=boost?'brightness(2.0) contrast(1.5)':'brightness(1.4) contrast(1.2)';
 }
-
-async function flipCam() {
-  stopDetection();
-  if (stream) stream.getTracks().forEach(t=>t.stop()); stream=null;
-  facingMode = facingMode==='user' ? 'environment' : 'user';
+async function flipCam(){
+  stopDetection(); if(stream){stream.getTracks().forEach(t=>t.stop());stream=null;}
+  facingMode=facingMode==='user'?'environment':'user';
   await startFaceCamera();
 }
+function toggleBoost(){ boost=!boost; $('boostBtn').classList.toggle('on',boost); applyFilter(); }
 
-function toggleBoost() {
-  boost = !boost;
-  $('boostBtn').classList.toggle('on', boost);
-  applyFilter();
-}
-
-// ── Load models ───────────────────────────────────────────────────────────────
-async function loadModels() {
-  if (modelsOK) { onModelsOK(); return; }
-
-  for (const url of [CDN, CDN2]) {
-    try {
-      showFaceLoad('Loading face detector…', 38);
-      await faceapi.nets.ssdMobilenetv1.loadFromUri(url);
-      showFaceLoad('Loading landmarks…', 62);
-      await faceapi.nets.faceLandmark68Net.loadFromUri(url);
-      showFaceLoad('Loading recognition…', 84);
-      await faceapi.nets.faceRecognitionNet.loadFromUri(url);
-      modelsOK = true;
-      showFaceLoad('✅ Ready!', 100);
-      setTimeout(onModelsOK, 300);
-      return;
-    } catch (e) { console.warn('CDN failed:', url); }
-  }
-
-  // Fallback tiny models
-  for (const url of [CDN, CDN2]) {
-    try {
+// ── Load models — TinyFaceDetector FIRST (fast) ────────────────
+async function loadModels(){
+  if(modelsOK){ onModelsOK(); return; }
+  for(const url of [CDN,CDN2]){
+    try{
+      showFaceLoad('Loading detector (1/3)…',30);
       await faceapi.nets.tinyFaceDetector.loadFromUri(url);
+      showFaceLoad('Loading landmarks (2/3)…',58);
       await faceapi.nets.faceLandmark68TinyNet.loadFromUri(url);
+      showFaceLoad('Loading recognition (3/3)…',82);
       await faceapi.nets.faceRecognitionNet.loadFromUri(url);
-      modelsOK = true;
-      window._useTiny = true;
-      setTimeout(onModelsOK, 300);
-      return;
-    } catch (e) {}
+      modelsOK=true; window._useTiny=true;
+      showFaceLoad('✅ Ready!',100);
+      setTimeout(onModelsOK,200); return;
+    }catch(e){ console.warn('Tiny CDN failed:',url,e.message); showFaceLoad('Trying backup…',15); }
   }
-
-  // All failed
-  $('faceAlert').innerHTML = '<div class="msg warn">⚠️ AI unavailable. Manual verify mode.</div>';
-  $('faceLoad').style.display    = 'none';
-  $('faceCamWrap').style.display = 'block';
-  $('verifyBtn').disabled = false;
-  $('verifyBtn').textContent = '🔓 Manual Verify';
-  $('verifyBtn').onclick = manualVerify;
+  // Fallback SSD
+  for(const url of [CDN,CDN2]){
+    try{
+      showFaceLoad('Loading detector (1/3)…',30);
+      await faceapi.nets.ssdMobilenetv1.loadFromUri(url);
+      showFaceLoad('Loading landmarks (2/3)…',58);
+      await faceapi.nets.faceLandmark68Net.loadFromUri(url);
+      showFaceLoad('Loading recognition (3/3)…',82);
+      await faceapi.nets.faceRecognitionNet.loadFromUri(url);
+      modelsOK=true;
+      showFaceLoad('✅ Ready!',100);
+      setTimeout(onModelsOK,200); return;
+    }catch(e){ console.warn('SSD CDN failed:',url); }
+  }
+  // AI totally failed
+  $('faceLoad').style.display='none';
+  $('faceCamWrap').style.display='block';
+  $('faceAlert').innerHTML='<div class="msg warn">⚠️ AI failed to load. Check internet connection. <button onclick="modelsOK=false;$(\'faceLoad\').style.display=\'block\';loadModels()" style="background:#4f46e5;color:white;border:none;border-radius:6px;padding:4px 10px;font-weight:700;cursor:pointer;margin-left:6px;">Retry</button></div>';
 }
 
-function showFaceLoad(txt, pct) {
-  $('faceLoadTxt').textContent  = txt;
-  $('faceLoadBar').style.width  = pct + '%';
-}
+function showFaceLoad(txt,pct){ $('faceLoadTxt').textContent=txt; $('faceLoadBar').style.width=pct+'%'; }
 
-function onModelsOK() {
-  $('faceLoad').style.display    = 'none';
-  $('faceCamWrap').style.display = 'block';
+function onModelsOK(){
+  $('faceLoad').style.display='none';
+  $('faceCamWrap').style.display='block';
   startLiveMatching();
-  fallTimer = setTimeout(() => {
-    if ($('verifyBtn').disabled) {
-      $('manualWarn').style.display = 'block';
-      $('manualVerifyBtn').style.display = 'flex';
+  // Auto-enable Verify button after 8s so user is never stuck
+  fallTimer=setTimeout(()=>{
+    if($('verifyBtn').disabled){
+      $('verifyBtn').disabled=false;
+      $('faceStatus').textContent='Tap Verify Now to continue';
     }
-  }, 18000);
+    $('manualWarn').style.display='block';
+    $('manualVerifyBtn').style.display='flex';
+  },12000);
 }
 
-function getOpts() {
+// Wrap detection in timeout so it never hangs
+function detectWithTimeout(canvas,opts,ms){
+  const det=faceapi.detectSingleFace(canvas,opts).withFaceLandmarks().withFaceDescriptor();
+  const timeout=new Promise((_,rej)=>setTimeout(()=>rej(new Error('timeout')),ms||3000));
+  return Promise.race([det,timeout]);
+}
+
+function getOpts(){
   return window._useTiny
-    ? new faceapi.TinyFaceDetectorOptions({ inputSize:416, scoreThreshold:0.25 })
-    : new faceapi.SsdMobilenetv1Options({ minConfidence: 0.3 });
+    ? new faceapi.TinyFaceDetectorOptions({inputSize:320,scoreThreshold:0.20})
+    : new faceapi.SsdMobilenetv1Options({minConfidence:0.22});
 }
 
-// ── ✅ LIVE MATCHING — runs every 300ms and shows real-time score ──────────────
-function startLiveMatching() {
-  const vid = $('faceVideo');
-
-  detectTimer = setInterval(async () => {
-    if (!vid.videoWidth || !modelsOK || verifying || autoVerified) return;
-
+// ── Live matching every 300ms ──────────────────────────────────
+function startLiveMatching(){
+  const vid=$('faceVideo');
+  detectTimer=setInterval(async()=>{
+    if(!vid.videoWidth||!modelsOK||verifying||autoVerified) return;
     measureLight(vid);
+    let det=null;
+    try{ det=await detectWithTimeout(preprocessFrame(vid),getOpts(),2500); }catch(e){}
+    if(!det){ try{ det=await detectWithTimeout(vid,getOpts(),2500); }catch(e){} }
 
-    try {
-      const frame = preprocessFrame(vid);
-      let det = await faceapi.detectSingleFace(frame, getOpts())
-        .withFaceLandmarks().withFaceDescriptor();
-      if (!det) {
-        det = await faceapi.detectSingleFace(vid, getOpts())
-          .withFaceLandmarks().withFaceDescriptor();
-      }
-
-      if (!det) {
-        $('faceOval').className = 'oval';
-        $('faceStatus').textContent = lux < 60
-          ? '🌙 Too dark — tap ☀️ or move to better light'
-          : '👤 Align your face in the oval';
-        $('scoreRingWrap').style.display = 'none';
-        $('verifyBtn').disabled = true;
-        return;
-      }
-
-      // ✅ Add to rolling buffer
-      liveDescBuffer.push(det.descriptor);
-      if (liveDescBuffer.length > 5) liveDescBuffer.shift();
-
-      // ✅ Average buffer for stability
-      const avgDesc = averageDescs(liveDescBuffer);
-      const distance = faceapi.euclideanDistance(storedDesc, avgDesc);
-      const matchPct = Math.max(0, Math.min(100, Math.round((1 - distance) * 130)));
-
-      // Update live score ring
-      $('scoreRingWrap').style.display = 'block';
-      const ring = $('scoreRing');
-      ring.textContent = matchPct + '%';
-
-      if (matchPct >= 70) {
-        ring.style.background = 'rgba(16,185,129,.85)';
-        ring.style.borderColor = '#10b981';
-        $('faceOval').className = 'oval match';
-        $('faceStatus').textContent = `✅ ${matchPct}% match — tap Verify or hold still to auto-verify`;
-        $('verifyBtn').disabled = false;
-        clearTimeout(fallTimer);
-        $('manualWarn').style.display = 'none';
-
-        // ✅ AUTO-VERIFY when confidence ≥ 85% for 3 consecutive frames
-        if (matchPct >= 85 && liveDescBuffer.length >= 3 && !autoVerified) {
-          const allHigh = liveDescBuffer.slice(-3).every(d => {
-            return (1 - faceapi.euclideanDistance(storedDesc, d)) * 130 >= 80;
-          });
-          if (allHigh) {
-            autoVerified = true;
-            await completeLogin(avgDesc, distance);
-          }
-        }
-      } else if (matchPct >= 45) {
-        ring.style.background = 'rgba(245,158,11,.85)';
-        ring.style.borderColor = '#f59e0b';
-        $('faceOval').className = 'oval scan';
-        $('faceStatus').textContent = `🔍 ${matchPct}% — scanning…`;
-        $('verifyBtn').disabled = false;
-      } else {
-        ring.style.background = 'rgba(239,68,68,.8)';
-        ring.style.borderColor = '#ef4444';
-        $('faceOval').className = 'oval nomatch';
-        $('faceStatus').textContent = `❌ ${matchPct}% — move closer or adjust lighting`;
-        $('verifyBtn').disabled = distance > 0.9;
-      }
-
-    } catch (e) {}
-  }, 300); // ✅ 300ms for fast real-time feel
-}
-
-// ── Manual verify button ──────────────────────────────────────────────────────
-async function doVerify() {
-  if (verifying || autoVerified) return;
-  verifying = true;
-  stopDetection();
-
-  $('verifyBtn').disabled = true;
-  $('verifyBtn').innerHTML = '<span class="spin"></span> Verifying…';
-
-  const vid  = $('faceVideo');
-
-  try {
-    // Take 2 frames and average
-    const descs = [];
-    for (let i = 0; i < 2; i++) {
-      const frame = preprocessFrame(vid);
-      const det   = await faceapi.detectSingleFace(frame, getOpts())
-        .withFaceLandmarks().withFaceDescriptor()
-        || await faceapi.detectSingleFace(vid, getOpts())
-        .withFaceLandmarks().withFaceDescriptor();
-      if (det) descs.push(det.descriptor);
-      await new Promise(r => setTimeout(r, 150));
+    if(!det){
+      $('faceOval').className='oval';
+      $('faceStatus').textContent=lux<60?'🌙 Too dark — tap ☀️ or move to light':'👤 Align face in the oval';
+      $('scoreRingWrap').style.display='none';
+      return;
     }
-    // Also include buffer
-    if (liveDescBuffer.length) descs.push(...liveDescBuffer.slice(-2));
 
-    if (!descs.length) throw new Error('Face not detected. Ensure good lighting and try again.');
+    liveDescBuffer.push(det.descriptor);
+    if(liveDescBuffer.length>5) liveDescBuffer.shift();
 
-    const avgDesc = averageDescs(descs);
-    await completeLogin(avgDesc, faceapi.euclideanDistance(storedDesc, avgDesc));
-  } catch (e) {
-    $('faceAlert').innerHTML = `<div class="msg err">❌ ${e.message}</div>`;
-    $('verifyBtn').disabled = false;
-    $('verifyBtn').innerHTML = '🔍 Verify Now';
-    verifying = false;
-    $('faceOval').className = 'oval nomatch';
-    setTimeout(() => { $('faceOval').className='oval'; startLiveMatching(); }, 1800);
-  }
-}
+    const avgDesc=averageDescs(liveDescBuffer);
+    const distance=faceapi.euclideanDistance(storedDesc,avgDesc);
+    // Calibrated score: distance 0=100%, 0.4=75%, 0.6=50%, 1.0=0%
+    const matchPct=Math.max(0,Math.min(100,Math.round((1-distance/1.0)*100)));
 
-async function manualVerify() {
-  verifying = true;
-  stopDetection();
-  $('manualVerifyBtn').disabled = true;
-  $('manualVerifyBtn').innerHTML = '<span class="spin"></span>';
-  const vid = $('faceVideo');
+    $('scoreRingWrap').style.display='block';
+    const ring=$('scoreRing');
+    ring.textContent=matchPct+'%';
 
-  let descs = [...liveDescBuffer]; // Use whatever we have from buffer
-
-  if (modelsOK) {
-    for (const conf of [0.2, 0.12, 0.07]) {
-      const opts = window._useTiny
-        ? new faceapi.TinyFaceDetectorOptions({ inputSize:608, scoreThreshold:conf })
-        : new faceapi.SsdMobilenetv1Options({ minConfidence:conf });
-      const det = await faceapi.detectSingleFace(preprocessFrame(vid), opts)
-        .withFaceLandmarks().withFaceDescriptor()
-        || await faceapi.detectSingleFace(vid, opts)
-        .withFaceLandmarks().withFaceDescriptor();
-      if (det) { descs.push(det.descriptor); break; }
+    if(matchPct>=65){
+      ring.style.background='rgba(16,185,129,.85)'; ring.style.borderColor='#10b981';
+      $('faceOval').className='oval match';
+      $('faceStatus').textContent=`✅ ${matchPct}% match — tap Verify or hold for auto`;
+      $('verifyBtn').disabled=false;
+      clearTimeout(fallTimer);
+      $('manualWarn').style.display='none';
+      // Auto-verify at 80%+ for 3 stable frames
+      if(matchPct>=80 && liveDescBuffer.length>=3 && !autoVerified){
+        const allGood=liveDescBuffer.slice(-3).every(d=>(1-faceapi.euclideanDistance(storedDesc,d)/1.0)*100>=70);
+        if(allGood){ autoVerified=true; await completeLogin(avgDesc,distance); }
+      }
+    } else if(matchPct>=40){
+      ring.style.background='rgba(245,158,11,.85)'; ring.style.borderColor='#f59e0b';
+      $('faceOval').className='oval scan';
+      $('faceStatus').textContent=`🔍 ${matchPct}% — hold still, scanning…`;
+      $('verifyBtn').disabled=false;
+    } else {
+      ring.style.background='rgba(239,68,68,.8)'; ring.style.borderColor='#ef4444';
+      $('faceOval').className='oval nomatch';
+      $('faceStatus').textContent=`❌ ${matchPct}% — move closer or tap ☀️ for better light`;
+      if($('verifyBtn').disabled) $('verifyBtn').disabled=(matchPct<10);
     }
-  }
-
-  if (!descs.length) descs.push(new Float32Array(pixelFingerprint(vid)));
-
-  const avgDesc = averageDescs(descs);
-  await completeLogin(avgDesc, faceapi.euclideanDistance(storedDesc, avgDesc), true);
+  },300);
 }
 
-// ✅ Complete login: check threshold and create session
-async function completeLogin(desc, distance, lenient = false) {
-  const THRESHOLD = lenient ? 0.75 : 0.60;
-  const matchPct  = Math.max(0, Math.min(100, Math.round((1 - distance) * 130)));
-
-  if (distance > THRESHOLD) {
-    verifying = false; autoVerified = false;
-    const tip = lux < 90 ? ' Try better lighting or tap ☀️.' : ' Make sure your face is fully visible.';
-    throw new Error(
-      `Face match failed — ${matchPct}% confidence (need 40%+).${tip}`
-    );
+// ── Verify button ─────────────────────────────────────────────
+async function doVerify(){
+  if(verifying||autoVerified) return;
+  verifying=true; stopDetection();
+  $('verifyBtn').disabled=true; $('verifyBtn').innerHTML='<span class="spin"></span> Verifying…';
+  const vid=$('faceVideo');
+  try{
+    const descs=[...liveDescBuffer]; // Start with what we have
+    // Take 2 fresh frames
+    for(let i=0;i<2;i++){
+      let det=null;
+      try{ det=await detectWithTimeout(preprocessFrame(vid),getOpts(),3000); }catch(e){}
+      if(!det){ try{ det=await detectWithTimeout(vid,getOpts(),3000); }catch(e){} }
+      if(det) descs.push(det.descriptor);
+      await new Promise(r=>setTimeout(r,100));
+    }
+    if(!descs.length) throw new Error('Face not detected. Ensure good lighting and look at the camera.');
+    const avgDesc=averageDescs(descs);
+    await completeLogin(avgDesc,faceapi.euclideanDistance(storedDesc,avgDesc));
+  }catch(e){
+    $('faceAlert').innerHTML=`<div class="msg err">❌ ${e.message}</div>`;
+    $('verifyBtn').disabled=false; $('verifyBtn').innerHTML='🔍 Verify Now';
+    verifying=false;
+    $('faceOval').className='oval nomatch';
+    setTimeout(()=>{ $('faceOval').className='oval'; startLiveMatching(); },1800);
   }
+}
 
-  // ✅ Show success overlay on camera
+// ── Manual verify (last resort, no pixelFingerprint fallback) ─
+async function manualVerify(){
+  if(verifying) return;
+  verifying=true; stopDetection();
+  const mbtn=$('manualVerifyBtn');
+  mbtn.disabled=true; mbtn.innerHTML='<span class="spin"></span> Verifying…';
+  $('faceAlert').innerHTML='';
+  const vid=$('faceVideo');
+  const descs=[...liveDescBuffer];
+  // Try fresh detection at 3 thresholds
+  const thresholds=window._useTiny
+    ?[[320,0.20],[160,0.12],[160,0.07]]
+    :[[0.22],[0.14],[0.07]];
+  for(const t of thresholds){
+    if(descs.length>1) break;
+    const opts=window._useTiny
+      ?new faceapi.TinyFaceDetectorOptions({inputSize:t[0],scoreThreshold:t[1]})
+      :new faceapi.SsdMobilenetv1Options({minConfidence:t[0]});
+    let det=null;
+    try{ det=await detectWithTimeout(preprocessFrame(vid),opts,3000); }catch(e){}
+    if(!det){ try{ det=await detectWithTimeout(vid,opts,3000); }catch(e){} }
+    if(det) descs.push(det.descriptor);
+  }
+  if(!descs.length){
+    verifying=false;
+    mbtn.disabled=false; mbtn.innerHTML='🔓 Manual Verify (Override)';
+    $('faceAlert').innerHTML='<div class="msg err">❌ No face detected. Ensure face is clearly visible in good lighting.</div>';
+    startLiveMatching();
+    return;
+  }
+  const avgDesc=averageDescs(descs);
+  await completeLogin(avgDesc,faceapi.euclideanDistance(storedDesc,avgDesc),true)
+    .catch(e=>{
+      verifying=false;
+      mbtn.disabled=false; mbtn.innerHTML='🔓 Manual Verify (Override)';
+      $('faceAlert').innerHTML=`<div class="msg err">❌ ${e.message}</div>`;
+      startLiveMatching();
+    });
+}
+
+// ── Complete login ─────────────────────────────────────────────
+async function completeLogin(desc,distance,lenient=false){
+  // distance: 0=perfect match, 1=no match
+  // lenient: 0.72 threshold, strict: 0.58
+  const THRESHOLD=lenient?0.72:0.58;
+  const matchPct=Math.max(0,Math.min(100,Math.round((1-distance/1.0)*100)));
+  if(distance>THRESHOLD){
+    verifying=false; autoVerified=false;
+    const tip=lux<90?' Try better lighting or tap ☀️.':' Ensure your face is fully visible.';
+    throw new Error(`Face match failed — ${matchPct}% (need ${Math.round((1-THRESHOLD)*100)}%+).${tip}`);
+  }
   $('successOverlay').classList.remove('hidden');
-  $('faceStatus').textContent = `✅ ${matchPct}% match — Welcome!`;
-  $('scoreRing').textContent  = matchPct + '%';
-  $('scoreRing').style.background   = 'rgba(16,185,129,.9)';
-  $('scoreRing').style.borderColor  = '#10b981';
-  $('faceOval').className = 'oval match';
-
-  // Create server session
-  const res  = await fetch('/api/voter/session', {
-    method:'POST', headers:{'Content-Type':'application/json'},
-    body: JSON.stringify({ voterId: voterInfo.voterId })
-  });
-  const data = await res.json();
-  if (!res.ok) throw new Error(data.error);
-
-  setTimeout(() => { stopAll(); window.location.href = '/vote'; }, 1600);
+  $('faceStatus').textContent=`✅ ${matchPct}% match — Welcome!`;
+  $('scoreRing').textContent=matchPct+'%';
+  $('scoreRing').style.background='rgba(16,185,129,.9)';
+  $('scoreRing').style.borderColor='#10b981';
+  $('faceOval').className='oval match';
+  const res=await fetch('/api/voter/session',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({voterId:voterInfo.voterId})});
+  const data=await res.json();
+  if(!res.ok) throw new Error(data.error);
+  setTimeout(()=>{ stopAll(); window.location.href='/vote'; },1600);
 }
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
-function averageDescs(descs) {
-  const out = new Float32Array(128);
-  descs.forEach(d => { for (let i=0;i<128;i++) out[i]+=d[i]; });
-  for (let i=0;i<128;i++) out[i] /= descs.length;
+// ── Helpers ───────────────────────────────────────────────────
+function averageDescs(descs){
+  const out=new Float32Array(128);
+  descs.forEach(d=>{ for(let i=0;i<128;i++) out[i]+=d[i]; });
+  for(let i=0;i<128;i++) out[i]/=descs.length;
   return out;
 }
 
-function preprocessFrame(vid) {
-  const c = document.createElement('canvas');
-  c.width  = vid.videoWidth  || 640;
-  c.height = vid.videoHeight || 480;
-  const ctx = c.getContext('2d');
-  const bri = lux < 70 ? 2.0 : lux < 120 ? 1.6 : 1.3;
-  const con = lux < 70 ? 1.6 : 1.3;
-  ctx.filter = `brightness(${bri}) contrast(${con})`;
-  ctx.drawImage(vid, 0, 0);
+function preprocessFrame(vid){
+  const c=document.createElement('canvas');
+  c.width=vid.videoWidth||640; c.height=vid.videoHeight||480;
+  const ctx=c.getContext('2d');
+  const bri=lux<70?2.0:lux<120?1.6:1.3, con=lux<70?1.6:1.3;
+  ctx.filter=`brightness(${bri}) contrast(${con})`;
+  ctx.drawImage(vid,0,0);
   return c;
 }
 
-function measureLight(vid) {
-  try {
-    const c = document.createElement('canvas');
-    c.width=80; c.height=60;
+function quickLum(vid){
+  try{
+    const c=document.createElement('canvas'); c.width=60; c.height=60;
+    const ctx=c.getContext('2d'); ctx.drawImage(vid,0,0,60,60);
+    const px=ctx.getImageData(0,0,60,60).data; let s=0;
+    for(let i=0;i<px.length;i+=4) s+=(px[i]+px[i+1]+px[i+2])/3;
+    return s/(px.length/4);
+  }catch(e){ return 128; }
+}
+
+function measureLight(vid){
+  try{
+    const c=document.createElement('canvas'); c.width=80; c.height=60;
     const ctx=c.getContext('2d'); ctx.drawImage(vid,0,0,80,60);
-    const px=ctx.getImageData(0,0,80,60).data;
-    let s=0;
+    const px=ctx.getImageData(0,0,80,60).data; let s=0;
     for(let i=0;i<px.length;i+=16) s+=(px[i]+px[i+1]+px[i+2])/3;
-    lux = s/(px.length/16);
+    lux=s/(px.length/16);
     const chip=$('lightChip');
     if(lux<50){chip.textContent='🌑 Very Dark';chip.style.background='rgba(120,53,15,.85)';if(!boost){boost=true;applyFilter();$('boostBtn').classList.add('on');}}
     else if(lux<90){chip.textContent='🌙 Low Light';chip.style.background='rgba(100,50,0,.85)';}
     else if(lux<160){chip.textContent='💡 OK';chip.style.background='rgba(0,0,0,.6)';}
     else{chip.textContent='☀️ Good';chip.style.background='rgba(5,80,40,.85)';}
-  } catch(e){}
-}
-
-function pixelFingerprint(vid) {
-  const c=document.createElement('canvas'); c.width=64; c.height=64;
-  c.getContext('2d').drawImage(vid,0,0,64,64);
-  const px=c.getContext('2d').getImageData(0,0,64,64).data;
-  return Array.from({length:128},(_,i)=>{
-    const idx=((i/128)*(px.length/4))|0;
-    return(px[idx*4]+px[idx*4+1]+px[idx*4+2])/(255*3);
-  });
+  }catch(e){}
 }
 
 function stopDetection(){ clearInterval(detectTimer); detectTimer=null; }
@@ -600,9 +535,7 @@ function stopAll(){
   if(stream){stream.getTracks().forEach(t=>t.stop()); stream=null;}
 }
 
-document.addEventListener('keydown', e => {
-  if(e.key==='Enter' && !$('idCard').classList.contains('hidden')) findVoter();
-});
+document.addEventListener('keydown',e=>{ if(e.key==='Enter'&&!$('idCard').classList.contains('hidden')) findVoter(); });
 </script>
 </body>
 </html>

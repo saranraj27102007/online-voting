@@ -153,7 +153,7 @@
       <div id="e1"></div>
       <div class="fg">
         <label class="lbl">Full Name *</label>
-        <input id="fName" class="inp" type="text" placeholder="As on Aadhaar / College ID" autocomplete="name"/>
+        <input id="fName" class="inp" type="text" placeholder="As on Aadhaar / PAN Card" autocomplete="name"/>
       </div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
         <div class="fg">
@@ -208,80 +208,148 @@
   <!-- ─── STEP 3: ID Proof ─────────────────────────────────── -->
   <div id="step3" style="display:none;">
 
-    <!-- 3a: Choose type -->
+    <!-- 3a: Choose document type -->
     <div id="s3a" class="card">
-      <p class="ctitle">🪪 Identity & Age Proof</p>
-      <p class="csub">Scan your ID — OCR reads name &amp; DOB automatically</p>
+      <p class="ctitle">🪪 Choose ID Document</p>
+      <p class="csub">Select the ID you want to verify with — scan or upload a photo</p>
       <div id="e3a"></div>
-      <div class="proof-row">
-        <div class="pcard" id="pc-a" onclick="pickProof('aadhaar')">
-          <div class="icon">🪪</div>
-          <div class="pname">Aadhaar Card</div>
-          <div class="pdesc">Government issued<br/>✅ Recommended</div>
+
+      <!-- Aadhaar Card -->
+      <div class="pcard" id="pc-aadhaar" onclick="pickProof('aadhaar')" style="display:flex;align-items:center;gap:14px;padding:16px;text-align:left;margin-bottom:10px;">
+        <div style="width:48px;height:48px;border-radius:14px;background:#eef2ff;display:flex;align-items:center;justify-content:center;font-size:1.8rem;flex-shrink:0;">🪪</div>
+        <div style="flex:1;">
+          <div style="font-weight:800;font-size:14px;color:#0f172a;">Aadhaar Card</div>
+          <div style="font-size:12px;color:#64748b;margin-top:3px;">Government issued · Verifies Name &amp; Date of Birth</div>
         </div>
-        <div class="pcard" id="pc-c" onclick="pickProof('college')">
-          <div class="icon">🎓</div>
-          <div class="pname">College ID</div>
-          <div class="pdesc">Student ID with<br/>Name &amp; DOB</div>
-        </div>
+        <div id="pc-aadhaar-tick" style="font-size:1.4rem;flex-shrink:0;">⬜</div>
       </div>
+
+      <!-- PAN Card -->
+      <div class="pcard" id="pc-pan" onclick="pickProof('pan')" style="display:flex;align-items:center;gap:14px;padding:16px;text-align:left;margin-bottom:10px;">
+        <div style="width:48px;height:48px;border-radius:14px;background:#f0fdf4;display:flex;align-items:center;justify-content:center;font-size:1.8rem;flex-shrink:0;">💳</div>
+        <div style="flex:1;">
+          <div style="font-weight:800;font-size:14px;color:#0f172a;">PAN Card</div>
+          <div style="font-size:12px;color:#64748b;margin-top:3px;">Income Tax Dept · Verifies Name &amp; Date of Birth</div>
+        </div>
+        <div id="pc-pan-tick" style="font-size:1.4rem;flex-shrink:0;">⬜</div>
+      </div>
+
+      <!-- College ID -->
+      <div class="pcard" id="pc-college" onclick="pickProof('college')" style="display:flex;align-items:center;gap:14px;padding:16px;text-align:left;margin-bottom:18px;">
+        <div style="width:48px;height:48px;border-radius:14px;background:#fef9c3;display:flex;align-items:center;justify-content:center;font-size:1.8rem;flex-shrink:0;">🎓</div>
+        <div style="flex:1;">
+          <div style="font-weight:800;font-size:14px;color:#0f172a;">College ID Card</div>
+          <div style="font-size:12px;color:#64748b;margin-top:3px;">Student identity · Verifies Name (DOB optional)</div>
+        </div>
+        <div id="pc-college-tick" style="font-size:1.4rem;flex-shrink:0;">⬜</div>
+      </div>
+
       <div id="proofTip" style="display:none;margin-bottom:14px;"></div>
-      <button class="btn blue" id="btnGoScan" onclick="startScan()" disabled>Continue → Scan Document</button>
+      <button class="btn blue" id="btnGoScan" onclick="startScan()" disabled>Continue → Scan / Upload Document</button>
       <button class="btn grey" onclick="goStep(2)" style="margin-top:8px;">← Back</button>
     </div>
 
-    <!-- 3b: Camera -->
+    <!-- 3b: Camera + Upload -->
     <div id="s3b" style="display:none;">
       <div class="card">
         <p class="ctitle" id="scanTitle">📷 Scan Document</p>
-        <p class="csub" id="scanSub">Loading camera…</p>
+        <p class="csub" id="scanSub">Choose how to submit your ID</p>
         <div id="e3b"></div>
 
-        <!-- Device banner (filled by JS) -->
-        <div id="deviceTip" style="display:none;margin-bottom:12px;"></div>
-
-        <!-- Camera selector — shown when multiple cameras detected -->
-        <div id="camSelectWrap" style="display:none;margin-bottom:12px;">
-          <label class="lbl">Select Camera</label>
-          <select id="camSelect" class="inp" style="height:44px;padding:8px 12px;" onchange="switchCamera()"></select>
+        <!-- Method tabs -->
+        <div style="display:flex;gap:8px;margin-bottom:14px;">
+          <button id="tabCam" onclick="switchTab('cam')"
+            style="flex:1;height:44px;border-radius:10px;border:2px solid #4f46e5;background:#eef2ff;color:#4f46e5;font-weight:700;font-size:13px;cursor:pointer;">
+            📷 Camera
+          </button>
+          <button id="tabUpload" onclick="switchTab('upload')"
+            style="flex:1;height:44px;border-radius:10px;border:2px solid #e2e8f0;background:#f8fafc;color:#64748b;font-weight:700;font-size:13px;cursor:pointer;">
+            📁 Upload Photo
+          </button>
         </div>
 
-        <div id="docLoading" style="text-align:center;padding:20px 0;">
-          <div class="spin-b" style="margin:0 auto 10px;"></div>
-          <p id="docLoadTxt" style="font-size:13px;color:#64748b;font-weight:600;">Starting camera…</p>
-        </div>
+        <!-- ═══ CAMERA TAB ═══ -->
+        <div id="tabCamContent">
+          <div id="deviceTip" style="display:none;margin-bottom:12px;"></div>
 
-        <div id="docCamWrap" style="display:none;">
-          <div class="doc-cam" id="docCamBox">
-            <video id="docVid" autoplay muted playsinline></video>
-            <div class="cam-top">
-              <span class="lx" id="docLx">💡—</span>
-              <div style="display:flex;gap:7px;">
-                <button class="icn" id="btnFlipDoc" onclick="flipDocCam()" style="display:none;" title="Flip camera">🔄</button>
-                <button class="icn" id="docBoost" onclick="toggleDocBoost()" title="Boost brightness">☀️</button>
+          <!-- Camera dropdown - always shown on desktop -->
+          <div id="camSelectWrap" style="display:none;margin-bottom:10px;">
+            <label class="lbl">Select Camera</label>
+            <select id="camSelect" class="inp" style="height:44px;padding:8px 12px;" onchange="switchCamera()"></select>
+            <p style="font-size:11px;color:#94a3b8;margin:4px 0 0 4px;">⬆️ Camera black? Choose a different one above</p>
+          </div>
+
+          <div id="docLoading" style="text-align:center;padding:20px 0;">
+            <div class="spin-b" style="margin:0 auto 10px;"></div>
+            <p id="docLoadTxt" style="font-size:13px;color:#64748b;font-weight:600;">Starting camera…</p>
+          </div>
+
+          <div id="docCamWrap" style="display:none;">
+            <div class="doc-cam" id="docCamBox">
+              <video id="docVid" autoplay muted playsinline></video>
+              <div class="cam-top">
+                <span class="lx" id="docLx">💡—</span>
+                <div style="display:flex;gap:7px;">
+                  <button class="icn" id="btnFlipDoc" onclick="flipDocCam()" style="display:none;" title="Flip camera">🔄</button>
+                  <button class="icn" id="docBoost" onclick="toggleDocBoost()" title="Boost brightness">☀️</button>
+                </div>
               </div>
+              <div class="doc-frame" id="docFrame"></div>
+              <div class="doc-corner tl"></div><div class="doc-corner tr"></div>
+              <div class="doc-corner bl"></div><div class="doc-corner br"></div>
+              <div class="cam-bar" id="docBar">📄 Hold document inside the frame</div>
             </div>
-            <div class="doc-frame" id="docFrame"></div>
-            <div class="doc-corner tl"></div><div class="doc-corner tr"></div>
-            <div class="doc-corner bl"></div><div class="doc-corner br"></div>
-            <div class="cam-bar" id="docBar">📄 Hold document inside the frame</div>
-          </div>
-          <p id="docHint" style="text-align:center;font-size:11px;color:rgba(255,255,255,.4);margin:6px 0 10px;"></p>
-          <div id="docTipBox" style="margin-bottom:10px;"></div>
-          <div class="btn-row">
-            <button class="btn grey" style="max-width:70px;" onclick="stopDocCam();showS3a()">← Back</button>
-            <button class="btn blue" id="btnCap" onclick="captureDoc()">📸 Capture</button>
+            <p id="docHint" style="text-align:center;font-size:11px;color:rgba(255,255,255,.4);margin:6px 0 10px;"></p>
+            <div id="docTipBox" style="margin-bottom:10px;"></div>
+            <div class="btn-row">
+              <button class="btn grey" style="max-width:70px;" onclick="stopDocCam();showS3a()">← Back</button>
+              <button class="btn blue" id="btnCap" onclick="captureDoc()">📸 Capture</button>
+            </div>
           </div>
         </div>
+
+        <!-- ═══ UPLOAD TAB ═══ -->
+        <div id="tabUploadContent" style="display:none;">
+          <div class="al info" style="font-size:12px;margin-bottom:14px;">
+            💡 <strong>Best for Laptop/PC:</strong> Take a clear photo of your ID with your phone → send via WhatsApp/email/USB → upload here. Or drag &amp; drop a JPG/PNG.
+          </div>
+
+          <!-- Drop zone -->
+          <div id="uploadZone"
+            onclick="document.getElementById('fileInput').click()"
+            ondragover="event.preventDefault();this.style.borderColor='#4f46e5';this.style.background='#eef2ff';"
+            ondragleave="this.style.borderColor='#cbd5e1';this.style.background='#f8fafc';"
+            ondrop="handleDrop(event)"
+            style="border:2px dashed #cbd5e1;border-radius:14px;padding:32px 20px;text-align:center;cursor:pointer;background:#f8fafc;transition:all .2s;margin-bottom:12px;">
+            <div style="font-size:2.8rem;margin-bottom:8px;">📁</div>
+            <div style="font-weight:700;font-size:15px;color:#0f172a;margin-bottom:4px;">Click to upload or drag &amp; drop</div>
+            <div style="font-size:12px;color:#64748b;">JPG · PNG · JPEG — Max 10MB</div>
+          </div>
+          <input type="file" id="fileInput" accept="image/jpeg,image/jpg,image/png" style="display:none;" onchange="handleFileUpload(event)"/>
+
+          <!-- Preview after upload -->
+          <div id="uploadPreview" style="display:none;margin-bottom:12px;">
+            <img id="uploadImg" style="width:100%;border-radius:12px;display:block;margin-bottom:8px;border:2px solid #e2e8f0;" alt="ID preview"/>
+            <div class="al ok" style="font-size:12px;margin-bottom:8px;">✅ Image loaded — click Verify Document below</div>
+            <div class="btn-row">
+              <button class="btn grey" style="max-width:110px;" onclick="clearUpload()">🔄 Change Image</button>
+              <button class="btn blue" id="btnVerifyUpload" onclick="verifyUpload()">🔍 Verify Document</button>
+            </div>
+          </div>
+
+          <button class="btn grey" onclick="showS3a()" style="margin-top:4px;">← Back</button>
+        </div>
+
       </div>
     </div>
 
     <!-- 3c: OCR result -->
     <div id="s3c" style="display:none;">
       <div class="card">
-        <p class="ctitle">🔍 Verifying Document</p>
+        <p class="ctitle" id="ocrCardTitle">🔍 Verifying Document</p>
+        <p class="csub" id="ocrCardSub">Checking name &amp; date of birth…</p>
         <div id="e3c"></div>
-        <canvas id="docCanvas" style="width:100%;border-radius:12px;display:block;margin-bottom:12px;"></canvas>
+        <canvas id="docCanvas" style="width:100%;border-radius:12px;display:block;margin-bottom:12px;border:2px solid #e2e8f0;"></canvas>
         <div id="ocrLoading" style="text-align:center;padding:12px 0;">
           <div style="display:flex;align-items:center;justify-content:center;gap:10px;margin-bottom:8px;">
             <div class="spin-b"></div>
@@ -292,7 +360,8 @@
         <div id="ocrResult" style="display:none;"></div>
         <div id="ocrActions" style="display:none;margin-top:12px;">
           <button class="btn green" id="btnAccept" onclick="acceptProof()" style="display:none;">✅ Verified — Continue to Face Scan</button>
-          <button class="btn grey" onclick="retryDoc()" style="margin-top:8px;">🔄 Retake Photo</button>
+          <button class="btn grey" onclick="retryDoc()" style="margin-top:8px;">🔄 Retake / Re-upload</button>
+          <button class="btn grey" onclick="showS3a()" style="margin-top:8px;font-size:13px;">← Choose Different Document</button>
         </div>
       </div>
     </div>
@@ -301,45 +370,64 @@
   <!-- ─── STEP 4: Face ─────────────────────────────────────── -->
   <div id="step4" style="display:none;">
 
-    <!-- 4a: Loading -->
-    <div id="s4a" class="card" style="text-align:center;padding:30px 20px;">
-      <div style="font-size:3rem;margin-bottom:12px;">🤖</div>
-      <p id="aiTxt" style="font-weight:700;font-size:14px;margin-bottom:10px;">Loading AI…</p>
-      <div class="prog"><div class="prog-f" id="aiBar" style="width:5%;"></div></div>
-    </div>
-
-    <!-- 4b: Camera -->
+    <!-- Camera panel (shown immediately) -->
     <div id="s4b" style="display:none;">
+
+      <!-- Camera selector for desktop -->
+      <div id="faceCamSelectWrap" style="display:none;margin-bottom:10px;">
+        <div class="card" style="padding:12px;">
+          <label class="lbl">Select Camera</label>
+          <select id="faceCamSelect" class="inp" style="height:44px;padding:8px 12px;" onchange="switchFaceCamera()"></select>
+          <p style="font-size:11px;color:#94a3b8;margin:4px 0 0;">Black screen? Pick a different camera above.</p>
+        </div>
+      </div>
+
       <div class="face-cam" id="faceCamEl">
         <video id="faceVid" autoplay muted playsinline></video>
         <div class="cam-top">
-          <span class="lx" id="faceLx">💡—</span>
+          <span class="lx" id="faceLx">💡 —</span>
           <div style="display:flex;gap:7px;">
-            <button class="icn" onclick="flipFaceCam()">🔄</button>
+            <button class="icn" id="btnFlipFace" onclick="flipFaceCam()" title="Flip camera">🔄</button>
             <button class="icn" id="faceBoost" onclick="toggleFaceBoost()">☀️</button>
           </div>
         </div>
         <div class="oval-wrap"><div class="oval" id="faceOval"></div></div>
+        <!-- Countdown ring overlay -->
+        <div id="cntdOverlay" style="display:none;position:absolute;inset:0;display:none;align-items:center;justify-content:center;pointer-events:none;">
+          <div id="cntdNum" style="font-size:5rem;font-weight:900;color:white;text-shadow:0 0 20px rgba(0,0,0,.8);"></div>
+        </div>
         <div class="face-btm">
-          <div class="face-txt" id="faceTxt">👤 Align face inside the oval</div>
-          <div class="dots" id="faceDots" style="display:none;">
-            <div class="dot" id="d0"></div><div class="dot" id="d1"></div><div class="dot" id="d2"></div>
-          </div>
+          <div class="face-txt" id="faceTxt">👤 Look straight at the camera</div>
         </div>
       </div>
-      <p style="text-align:center;font-size:11px;color:rgba(255,255,255,.4);margin:6px 0 10px;">🔄 flip · ☀️ boost · Hold still for 3-frame capture</p>
+
+      <!-- AI status bar (subtle, below camera) -->
+      <div id="aiStatusBar" style="display:flex;align-items:center;gap:8px;padding:7px 12px;background:rgba(255,255,255,.07);border-radius:10px;margin-top:6px;margin-bottom:10px;">
+        <div class="spin-b" id="aiSpinner" style="flex-shrink:0;"></div>
+        <span id="aiStatusTxt" style="font-size:11px;color:rgba(255,255,255,.5);font-weight:600;">Loading face AI in background…</span>
+      </div>
+
       <div id="e4"></div>
       <div class="btn-row">
         <button class="btn grey" style="max-width:70px;" onclick="stopFaceCam();goStep(3)">← Back</button>
-        <button class="btn blue" id="btnFace" onclick="captureFace()" disabled>📸 Start Face Scan</button>
+        <button class="btn blue" id="btnFace" onclick="snapFace()">📸 Snap Photo</button>
       </div>
-      <button class="btn grey" id="btnManual" onclick="manualFace()" style="margin-top:8px;display:none;font-size:13px;">📷 Manual Capture</button>
+      <button class="btn grey" id="btnRetryFace" onclick="retryFaceCamera()" style="margin-top:8px;font-size:13px;background:#fef3c7;color:#92400e;display:none;">🔄 Retry / Change Camera</button>
     </div>
 
-    <!-- 4c: Preview -->
+    <!-- Processing panel (shown after snap while AI runs) -->
+    <div id="s4proc" style="display:none;">
+      <div class="card" style="text-align:center;padding:30px 20px;">
+        <div style="font-size:3rem;margin-bottom:12px;">🤖</div>
+        <p id="procTxt" style="font-weight:700;font-size:14px;margin-bottom:10px;">Analysing face…</p>
+        <div class="prog"><div class="prog-f" id="procBar" style="width:10%;"></div></div>
+      </div>
+    </div>
+
+    <!-- Preview panel -->
     <div id="s4c" style="display:none;">
-      <div class="prev"><canvas id="faceCanvas"></canvas><div class="prev-badge">✅ 3 frames averaged</div></div>
-      <div class="al ok" style="margin-bottom:10px;">🎯 Face captured from 3 frames for best accuracy</div>
+      <div class="prev"><canvas id="faceCanvas"></canvas><div class="prev-badge">✅ Photo captured</div></div>
+      <div class="al ok" style="margin-bottom:10px;">🎯 Face photo saved — click below to complete registration</div>
       <div class="btn-row">
         <button class="btn grey" style="max-width:110px;" onclick="retakeFace()">🔄 Retake</button>
         <button class="btn green" id="btnReg" onclick="doRegister()">✅ Complete Registration</button>
@@ -358,8 +446,10 @@
 // STATE
 // ════════════════════════════════════════════════════════════
 var reg={}, proofType=null, proofOK=false, finalDesc=null;
+var aadhaarOK=false, panOK=false, collegeOK=false, currentDoc=null, includeCollege=false;
 var faceDescs=[], faceCapturing=false, faceStream=null, faceLoop=null;
 var faceModels=false, facingMode='user', faceBoostOn=false, faceLux=150;
+var faceCameraId=null;
 var docStream=null, docFacing='environment', docBoostOn=false, docLux=150, docLightLoop=null;
 var otpCountdown=null;
 var CDN1='https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/weights';
@@ -514,31 +604,154 @@ function showS3a(){
 
 function pickProof(type){
   proofType=type;
-  document.getElementById('pc-a').classList.toggle('sel',type==='aadhaar');
-  document.getElementById('pc-c').classList.toggle('sel',type==='college');
+  // Reset all ticks
+  ['aadhaar','pan','college'].forEach(function(t){
+    var card=document.getElementById('pc-'+t);
+    var tick=document.getElementById('pc-'+t+'-tick');
+    if(card) card.classList.remove('sel');
+    if(tick) tick.textContent='⬜';
+  });
+  // Highlight selected
+  var sel=document.getElementById('pc-'+type);
+  if(sel) sel.classList.add('sel');
+  var tick=document.getElementById('pc-'+type+'-tick');
+  if(tick) tick.textContent='🔵';
+
+  // Tip text
+  var tips={
+    aadhaar:'<div class="al info" style="margin:0;font-size:12px;">🪪 <strong>Aadhaar Tips:</strong> Show the <strong>FRONT</strong> of your Aadhaar card — photo, full name, and date of birth must all be clearly visible. Avoid glare and shadows.</div>',
+    pan:'<div class="al info" style="margin:0;font-size:12px;">💳 <strong>PAN Card Tips:</strong> Show the <strong>FRONT</strong> of your PAN card — full name, date of birth, and the 10-character PAN number (e.g. ABCDE1234F) must be fully visible.</div>',
+    college:'<div class="al info" style="margin:0;font-size:12px;">🎓 <strong>College ID Tips:</strong> Show the <strong>FRONT</strong> of your College ID — your full name must be visible. Date of birth is optional but improves verification score.</div>'
+  };
+  var tip=document.getElementById('proofTip');
+  tip.style.display='block';
+  tip.innerHTML=tips[type];
   document.getElementById('btnGoScan').disabled=false;
-  var tip=document.getElementById('proofTip');tip.style.display='block';
-  if(type==='aadhaar'){
-    tip.innerHTML='<div class="al info" style="margin:0;font-size:12px;">🪪 <strong>Aadhaar Tips:</strong> Show the FRONT with photo. Name and DOB must be clearly visible. No glare.</div>';
-  }else{
-    tip.innerHTML='<div class="al warn" style="margin:0;font-size:12px;">🎓 <strong>College ID Tips:</strong> Must show full Name AND Date of Birth. IDs without DOB will fail verification.</div>';
-  }
 }
 
 function startScan(){
-  if(!proofType) return al('e3a','err','Select an ID type first.');
+  if(!proofType) return al('e3a','err','⚠️ Please select an ID document type first.');
+  var titles={aadhaar:'Scan Aadhaar Card',pan:'Scan PAN Card',college:'Scan College ID Card'};
+  document.getElementById('scanTitle').textContent='📷 '+titles[proofType];
+  document.getElementById('scanSub').textContent='Use camera or upload a clear photo of your '+titles[proofType];
+  var tips={
+    aadhaar:'<div class="al info" style="margin:0;font-size:12px;">🪪 Hold Aadhaar card flat inside the frame — photo, name and DOB all visible. No shadows or glare.</div>',
+    pan:'<div class="al info" style="margin:0;font-size:12px;">💳 Hold PAN card flat — name, date of birth and 10-char PAN number must all be clearly visible.</div>',
+    college:'<div class="al info" style="margin:0;font-size:12px;">🎓 Hold College ID flat — your name must be clearly visible for matching.</div>'
+  };
+  document.getElementById('docTipBox').innerHTML=tips[proofType];
+
+  // Update OCR card title
+  var ocrTitles={aadhaar:'🪪 Aadhaar Card Verification',pan:'💳 PAN Card Verification',college:'🎓 College ID Verification'};
+  document.getElementById('ocrCardTitle').textContent=ocrTitles[proofType];
+  document.getElementById('ocrCardSub').textContent='Extracting and matching Name & Date of Birth from your document…';
+
   document.getElementById('s3a').style.display='none';
   document.getElementById('s3b').style.display='block';
   document.getElementById('s3c').style.display='none';
-  document.getElementById('scanTitle').textContent=proofType==='aadhaar'?'📷 Scan Aadhaar Card':'📷 Scan College ID';
-  // Sub changes per device
-  document.getElementById('scanSub').textContent=isMobile
-    ?'Hold document flat inside the frame — all 4 corners visible'
-    :'Hold document up to your webcam — fill the frame, keep steady';
-  document.getElementById('docTipBox').innerHTML=proofType==='aadhaar'
-    ?'<div class="al info" style="margin:0;font-size:12px;">🪪 Show front side: photo, name &amp; DOB all visible. No shadows or glare.</div>'
-    :'<div class="al warn" style="margin:0;font-size:12px;">🎓 Show full name, DOB and college name clearly. All text must be readable.</div>';
-  openDocCam();
+  switchTab(isMobile?'cam':'upload');
+}
+
+// ─── Tab switcher ─────────────────────────────────────────────
+function switchTab(tab){
+  var isCam = tab==='cam';
+  // Tab buttons
+  var btnCam=document.getElementById('tabCam'), btnUp=document.getElementById('tabUpload');
+  btnCam.style.borderColor  = isCam?'#4f46e5':'#e2e8f0';
+  btnCam.style.background   = isCam?'#eef2ff':'#f8fafc';
+  btnCam.style.color        = isCam?'#4f46e5':'#64748b';
+  btnUp.style.borderColor   = isCam?'#e2e8f0':'#4f46e5';
+  btnUp.style.background    = isCam?'#f8fafc':'#eef2ff';
+  btnUp.style.color         = isCam?'#64748b':'#4f46e5';
+  // Content panels
+  document.getElementById('tabCamContent').style.display    = isCam?'block':'none';
+  document.getElementById('tabUploadContent').style.display = isCam?'none':'block';
+  // Start / stop camera
+  if(isCam){
+    openDocCam();
+  } else {
+    stopDocCam();
+  }
+}
+
+// ─── File upload handlers ─────────────────────────────────────
+function handleDrop(e){
+  e.preventDefault();
+  var zone=document.getElementById('uploadZone');
+  zone.style.borderColor='#cbd5e1';zone.style.background='#f8fafc';
+  var file=e.dataTransfer.files[0];
+  if(file) loadUploadedFile(file);
+}
+
+function handleFileUpload(e){
+  var file=e.target.files[0];
+  if(file) loadUploadedFile(file);
+}
+
+function loadUploadedFile(file){
+  if(!file.type.match(/image\/(jpeg|jpg|png)/i)){
+    al('e3b','err','Only JPG or PNG images are accepted.');return;
+  }
+  if(file.size>10*1024*1024){
+    al('e3b','err','File too large. Maximum size is 10MB.');return;
+  }
+  al('e3b','','');
+  var reader=new FileReader();
+  reader.onload=function(e){
+    var img=document.getElementById('uploadImg');
+    img.src=e.target.result;
+    img.onload=function(){
+      document.getElementById('uploadZone').style.display='none';
+      document.getElementById('uploadPreview').style.display='block';
+    };
+  };
+  reader.readAsDataURL(file);
+}
+
+function clearUpload(){
+  document.getElementById('fileInput').value='';
+  document.getElementById('uploadPreview').style.display='none';
+  document.getElementById('uploadZone').style.display='block';
+  al('e3b','','');
+}
+
+async function verifyUpload(){
+  var img=document.getElementById('uploadImg');
+  if(!img.src||img.src===window.location.href){
+    al('e3b','err','Please upload an image first.');return;
+  }
+  var btn=document.getElementById('btnVerifyUpload');
+  btn.disabled=true;btn.innerHTML='<span class="spin-b"></span> Processing…';
+
+  // Draw uploaded image to canvas for OCR
+  var cnv=document.getElementById('docCanvas');
+  cnv.width=img.naturalWidth||img.width;
+  cnv.height=img.naturalHeight||img.height;
+  var ctx=cnv.getContext('2d');
+  // Enhance for OCR
+  ctx.filter='brightness(1.3) contrast(1.2)';
+  ctx.drawImage(img,0,0);
+
+  // Move to OCR step
+  document.getElementById('s3b').style.display='none';
+  document.getElementById('s3c').style.display='block';
+  document.getElementById('ocrLoading').style.display='block';
+  document.getElementById('ocrResult').style.display='none';
+  document.getElementById('ocrActions').style.display='none';
+  btn.disabled=false;btn.innerHTML='🔍 Verify Document';
+  await runOCR(cnv);
+}
+
+function retryDoc(){
+  document.getElementById('s3c').style.display='none';
+  document.getElementById('s3b').style.display='block';
+  document.getElementById('btnCap').disabled=false;
+  document.getElementById('btnCap').innerHTML='📸 Capture';
+  document.getElementById('docFrame').className='doc-frame';
+  clearUpload();
+  // Re-open whichever tab was active
+  var camVisible=document.getElementById('tabCamContent').style.display!=='none';
+  if(camVisible){ openDocCam(); } else { document.getElementById('uploadZone').style.display='block'; }
 }
 
 // ─── Device detection ─────────────────────────────────────────
@@ -561,30 +774,56 @@ async function detectCameras(){
 function populateCameraSelect(){
   var wrap = document.getElementById('camSelectWrap');
   var sel  = document.getElementById('camSelect');
-  if(availableCameras.length <= 1){ wrap.style.display='none'; return; }
+  if(availableCameras.length === 0){ wrap.style.display='none'; return; }
+
   sel.innerHTML='';
-  availableCameras.forEach(function(cam,i){
-    var opt=document.createElement('option');
-    opt.value=cam.deviceId;
-    // Label rear/back cameras more clearly
-    var lbl=cam.label;
-    if(/back|rear|environment/i.test(lbl)) lbl='📷 Rear Camera — '+lbl;
-    else if(/front|face|user/i.test(lbl))  lbl='🤳 Front Camera — '+lbl;
-    else lbl='📷 '+(i===0?'Main Camera':'Camera '+(i+1))+' — '+lbl;
-    opt.textContent=lbl;
+
+  // Score each camera — higher = better default choice
+  function scoreCamera(cam){
+    var lbl = cam.label.toLowerCase();
+    if(/virtual|obs|snap|ivcam|droid|vivo|samsung|iphone|android|phone|mirror|ndi|xsplit|manycam/i.test(lbl)) return -10; // virtual/phone cameras — avoid
+    if(/integrated|built.?in|internal|laptop|hd webcam|ir camera|webcam/i.test(lbl)) return 10; // built-in laptop cam — prefer
+    if(/back|rear|environment/i.test(lbl) && isMobile) return 8;  // rear cam on mobile
+    if(/usb|external/i.test(lbl)) return 3;
+    return 1; // unknown — neutral
+  }
+
+  // Sort: best score first
+  var sorted = availableCameras.slice().sort(function(a,b){ return scoreCamera(b)-scoreCamera(a); });
+
+  sorted.forEach(function(cam, i){
+    var opt = document.createElement('option');
+    opt.value = cam.deviceId;
+    var lbl = cam.label;
+    var score = scoreCamera(cam);
+    var prefix;
+    if(score === -10)     prefix = '⚠️ Virtual/Phone — ';
+    else if(score >= 10)  prefix = '✅ Laptop Webcam — ';
+    else if(/back|rear/i.test(lbl) && isMobile) prefix = '📷 Rear Camera — ';
+    else if(/front|user/i.test(lbl) && isMobile) prefix = '🤳 Front Camera — ';
+    else                  prefix = '📷 Camera '+(i+1)+' — ';
+    opt.textContent = prefix + lbl;
     sel.appendChild(opt);
   });
-  // Default: prefer rear camera on mobile, first camera on desktop
-  if(isMobile){
-    var rearIdx = availableCameras.findIndex(function(c){return /back|rear|environment/i.test(c.label);});
-    if(rearIdx>=0) sel.selectedIndex=rearIdx;
-  }
+
+  // Auto-select the best camera (first after sorting)
+  sel.selectedIndex = 0;
   selectedCameraId = sel.value;
-  wrap.style.display='block';
+
+  // Always show selector if there are multiple cameras
+  wrap.style.display = availableCameras.length > 1 ? 'block' : 'none';
 }
 
 async function switchCamera(){
   selectedCameraId = document.getElementById('camSelect').value;
+  // Warn if they picked a virtual/phone camera
+  var cam = availableCameras.find(function(c){ return c.deviceId===selectedCameraId; });
+  var isVirtual = cam && /virtual|obs|snap|ivcam|droid|vivo|samsung|iphone|android|phone|mirror|ndi|xsplit|manycam/i.test(cam.label);
+  var tip = document.getElementById('deviceTip');
+  if(isVirtual){
+    tip.style.display='block';
+    tip.innerHTML='<div class="al warn" style="margin:0;font-size:12px;">⚠️ <strong>Virtual/Phone camera selected.</strong> This may not work for document scanning. Please select your <strong>Laptop Webcam</strong> from the dropdown above for best results.</div>';
+  }
   stopDocCam();
   await openDocCam();
 }
@@ -594,34 +833,51 @@ async function openDocCam(){
   document.getElementById('docLoading').style.display='block';
   document.getElementById('docCamWrap').style.display='none';
   document.getElementById('docLoadTxt').textContent='Detecting cameras…';
+  al('e3b','','');
 
-  // Detect cameras first time
   if(availableCameras.length===0) await detectCameras();
   populateCameraSelect();
 
-  // Build constraints
-  var constraints;
+  document.getElementById('docLoadTxt').textContent='Starting camera…';
+
+  // Try a cascade of resolutions — HP HD Camera and most laptop webcams only do 720p or lower.
+  // We never force a resolution that might not be supported.
+  var fallbacks;
   if(selectedCameraId){
-    // Exact camera chosen from dropdown
-    constraints = {video:{deviceId:{exact:selectedCameraId},width:{ideal:1920},height:{ideal:1080},frameRate:{ideal:30}}};
+    fallbacks = [
+      {video:{deviceId:{exact:selectedCameraId},width:{ideal:1280},height:{ideal:720}}},
+      {video:{deviceId:{exact:selectedCameraId},width:{ideal:640}, height:{ideal:480}}},
+      {video:{deviceId:{exact:selectedCameraId}}},  // bare minimum — just open it
+    ];
   } else if(isMobile){
-    // Mobile: prefer rear camera
-    constraints = {video:{facingMode:{ideal:'environment'},width:{ideal:1920},height:{ideal:1080},frameRate:{ideal:30},advanced:[{focusMode:'continuous'},{exposureMode:'continuous'}]}};
+    fallbacks = [
+      {video:{facingMode:{ideal:'environment'},width:{ideal:1920},height:{ideal:1080},advanced:[{focusMode:'continuous'}]}},
+      {video:{facingMode:{ideal:'environment'},width:{ideal:1280},height:{ideal:720}}},
+      {video:{facingMode:{ideal:'environment'}}},
+    ];
   } else {
-    // Laptop/PC: use any available camera (usually webcam)
-    constraints = {video:{width:{ideal:1280},height:{ideal:720},frameRate:{ideal:30}}};
+    fallbacks = [
+      {video:{width:{ideal:1280},height:{ideal:720}}},
+      {video:{width:{ideal:640}, height:{ideal:480}}},
+      {video:true},
+    ];
   }
 
-  document.getElementById('docLoadTxt').textContent='Starting camera…';
-  try{
-    docStream = await navigator.mediaDevices.getUserMedia(constraints)
-      .catch(function(){
-        // Fallback: just ask for any video
-        return navigator.mediaDevices.getUserMedia({video:true});
-      });
-  }catch(e){
-    al('e3b','err','📷 Camera not found or blocked. Allow camera permission and refresh the page.');
+  docStream = null;
+  for(var fi=0; fi<fallbacks.length; fi++){
+    document.getElementById('docLoadTxt').textContent = fi===0 ? 'Starting camera…' : 'Retrying (attempt '+(fi+1)+') …';
+    try{
+      docStream = await navigator.mediaDevices.getUserMedia(fallbacks[fi]);
+      console.log('Camera started with fallback', fi, fallbacks[fi]);
+      break;
+    }catch(err){
+      console.warn('Camera attempt '+(fi+1)+' failed:', err.message);
+    }
+  }
+
+  if(!docStream){
     document.getElementById('docLoading').style.display='none';
+    showCameraError();
     return;
   }
 
@@ -629,31 +885,121 @@ async function openDocCam(){
   v.srcObject=docStream; v.play();
   applyDocFilter();
 
-  // Show flip button only on mobile (desktops have camera selector dropdown instead)
   document.getElementById('btnFlipDoc').style.display = isMobile ? 'flex' : 'none';
 
-  // Set instructions based on device type
-  var bar = document.getElementById('docBar');
+  var bar  = document.getElementById('docBar');
   var hint = document.getElementById('docHint');
   var tip  = document.getElementById('deviceTip');
 
+  // Check if selected cam is virtual/phone
+  var selCam = availableCameras.find(function(c){return c.deviceId===selectedCameraId;});
+  var isVirtualCam = selCam && /virtual|obs|snap|ivcam|droid|vivo|samsung|iphone|android|phone|mirror|ndi|xsplit|manycam/i.test(selCam.label);
+
   if(isMobile){
-    bar.textContent = '📄 Place document flat — all 4 corners inside the frame';
+    bar.textContent  = '📄 Place document flat — all 4 corners inside the frame';
     hint.textContent = '🔄 flip camera · ☀️ boost light · Keep document flat, no glare';
     tip.style.display = 'none';
   } else {
-    bar.textContent = '📄 Hold document up to your webcam — fill the frame';
-    hint.textContent = 'Hold document flat facing the webcam · Good lighting · Keep steady';
-    tip.style.display = 'block';
-    tip.innerHTML = '<div class="al info" style="margin:0;font-size:12px;">'
-      +'💻 <strong>Laptop/PC mode:</strong> Hold your '+(proofType==='aadhaar'?'Aadhaar card':'College ID')+' flat up to your webcam. '
-      +'Make sure all text is clearly readable. Use a desk lamp or face a window for best results.'
-      +'</div>';
+    bar.textContent  = '📄 Hold document up to your webcam — fill the frame';
+    hint.textContent = 'Hold document flat facing your webcam · Good lighting · Keep steady';
+    if(isVirtualCam){
+      tip.style.display='block';
+      tip.innerHTML='<div class="al warn" style="margin:0;font-size:13px;">⚠️ <strong>Phone/Virtual camera detected.</strong> This may show a black screen.<br><br>'
+        +'👉 <strong>Try the Upload Photo tab instead</strong> — much more reliable on laptops.'
+        +'<br><button onclick="switchTab(\'upload\')" style="margin-top:8px;background:#4f46e5;color:white;border:none;border-radius:8px;padding:8px 16px;font-weight:700;cursor:pointer;font-size:13px;">📁 Switch to Upload Photo</button></div>';
+    } else {
+      tip.style.display='block';
+      tip.innerHTML='<div class="al info" style="margin:0;font-size:12px;">💻 <strong>Laptop/PC mode:</strong> Hold your ID flat up to your webcam. All text must be clearly readable.</div>';
+    }
   }
 
   document.getElementById('docLoading').style.display='none';
   document.getElementById('docCamWrap').style.display='block';
   startDocLight();
+
+  // ── // ── Black screen detector ──────────────────────────
+  // HP HD Camera and some webcams take a few seconds to produce a frame.
+  // Check at 2s, then again at 4s before declaring failure.
+  function checkBlack(vid){
+    try{
+      var c=document.createElement('canvas');c.width=80;c.height=50;
+      var ctx=c.getContext('2d');ctx.drawImage(vid,0,0,80,50);
+      var px=ctx.getImageData(0,0,80,50).data,s=0;
+      for(var i=0;i<px.length;i+=4) s+=(px[i]+px[i+1]+px[i+2])/3;
+      return s/(px.length/4);
+    }catch(e){return 128;}
+  }
+  setTimeout(function(){
+    if(!docStream) return;
+    if(checkBlack(v)<6){
+      // Still black at 2s -- give it 2 more seconds then auto-retry
+      setTimeout(function(){
+        if(!docStream) return;
+        if(checkBlack(v)<6) showBlackScreenWarning();
+      },2000);
+    }
+  },2000);
+}
+function showBlackScreenWarning(){
+  // Black screen on HP cam usually means wrong resolution was forced.
+  // Show actionable message with retry button — NOT upload.
+  var tip = document.getElementById('deviceTip');
+  tip.style.display='block';
+  tip.innerHTML='<div class="al err" style="margin:0;font-size:13px;">'
+    +'<strong>Camera showing black screen.</strong> Trying to fix automatically...<br><br>'
+    +'<button onclick="retryCameraLowRes()" style="width:100%;background:#4f46e5;color:white;border:none;border-radius:10px;padding:11px;font-weight:700;cursor:pointer;font-size:14px;margin-bottom:8px;">🔄 Retry Camera (Auto-fix)</button>'
+    +(availableCameras.length>1?'<div style="font-size:12px;color:#7f1d1d;margin-top:4px;">Or pick a different camera from the SELECT CAMERA dropdown above.</div>':'')
+    +'</div>';
+  // Also auto-retry after 500ms
+  setTimeout(retryCameraLowRes, 500);
+}
+
+async function retryCameraLowRes(){
+  // Stop current dead stream and restart with bare minimum constraints
+  stopDocCam();
+  document.getElementById('deviceTip').style.display='none';
+  document.getElementById('docLoading').style.display='block';
+  document.getElementById('docCamWrap').style.display='none';
+  document.getElementById('docLoadTxt').textContent='Retrying with lower resolution...';
+  try{
+    // Use absolute minimum — no resolution hints at all
+    var constraint = selectedCameraId
+      ? {video:{deviceId:{exact:selectedCameraId}}}
+      : {video:true};
+    docStream = await navigator.mediaDevices.getUserMedia(constraint);
+    var v=document.getElementById('docVid');
+    v.srcObject=docStream;
+    await v.play();
+    applyDocFilter();
+    document.getElementById('docLoading').style.display='none';
+    document.getElementById('docCamWrap').style.display='block';
+    document.getElementById('btnFlipDoc').style.display = isMobile ? 'flex' : 'none';
+    startDocLight();
+    var tip=document.getElementById('deviceTip');
+    tip.style.display='block';
+    tip.innerHTML='<div class="al ok" style="margin:0;font-size:12px;">✅ Camera started! Hold your ID up to the webcam, fill the frame, then click Capture.</div>';
+  }catch(e){
+    document.getElementById('docLoading').style.display='none';
+    showCameraError();
+  }
+}
+
+function showCameraError(){
+  var tip = document.getElementById('deviceTip');
+  tip.style.display='block';
+  tip.innerHTML='<div class="al err" style="margin:0;font-size:13px;">'
+    +'📷 <strong>Camera could not be started.</strong><br><br>'
+    +'<strong>Things to try:</strong><br>'
+    +'<ul style="margin:8px 0 8px 16px;font-size:12px;color:#7f1d1d;">'
+    +'<li>Close any other apps using the camera (Zoom, Teams, etc.)</li>'
+    +'<li>Click the camera icon in your browser address bar and allow access</li>'
+    +'<li>Try a different browser (Chrome works best)</li>'
+    +'<li>Restart your browser and try again</li>'
+    +'</ul>'
+    +'<button onclick="retryCameraLowRes()" style="width:100%;background:#4f46e5;color:white;border:none;border-radius:10px;padding:11px;font-weight:700;cursor:pointer;font-size:14px;">🔄 Try Again</button>'
+    +'</div>';
+  document.getElementById('docCamWrap').style.display='none';
+  document.getElementById('docLoading').style.display='none';
 }
 
 function applyDocFilter(){
@@ -853,29 +1199,31 @@ function showOCRResult(rawText, confidence){
   var text=rawText;
   var textUP=text.toUpperCase();
 
-  // ── Detect document type from content ──────────────────────
+  // ── Detect document type ────────────────────────────────────
   var detectedAadhaar = /UNIQUE\s*IDENT|GOVERNMENT\s*OF\s*INDIA|UIDAI|AADHAAR|\d{4}\s*\d{4}\s*\d{4}/i.test(text);
-  var detectedCollege = /COLLEGE|UNIVERSITY|INSTITUTE|STUDENT|ENROLL|ROLL\s*NO/i.test(text);
+  var detectedPAN     = /INCOME\s*TAX|PERMANENT\s*ACCOUNT|GOVT\s*OF\s*INDIA|[A-Z]{5}[0-9]{4}[A-Z]/i.test(text);
 
   // ── Extract Aadhaar number (12 digits) ─────────────────────
   var aadhaarNum=null;
   var anm=text.match(/\b(\d{4})\s*(\d{4})\s*(\d{4})\b/);
   if(anm) aadhaarNum=anm[1]+' '+anm[2]+' '+anm[3];
 
-  // ── Extract DOB ─────────────────────────────────────────────
+  // ── Extract PAN number (XXXXX9999X format) ─────────────────
+  var panNum=null;
+  var pnm=text.match(/\b([A-Z]{5}[0-9]{4}[A-Z])\b/);
+  if(pnm) panNum=pnm[1];
+
+  // ── Extract DOB — Aadhaar DD/MM/YYYY, PAN DD/MM/YYYY ───────
   var dobRaw=null, dobISO=null;
   var dobPatterns=[
-    // Aadhaar: DOB: DD/MM/YYYY or DD-MM-YYYY
     /\bDOB\s*[:\-]?\s*(\d{1,2}[\/\-\.]\d{1,2}[\/\-\.]\d{4})\b/i,
     /\bDate\s*of\s*Birth\s*[:\-]?\s*(\d{1,2}[\/\-\.]\d{1,2}[\/\-\.]\d{4})\b/i,
     /\bBirth\s*Date\s*[:\-]?\s*(\d{1,2}[\/\-\.]\d{1,2}[\/\-\.]\d{4})\b/i,
     /\bBirth\s*[:\-]?\s*(\d{1,2}[\/\-\.]\d{1,2}[\/\-\.]\d{4})\b/i,
-    // Bare DD/MM/YYYY
-    /\b(\d{2}[\/\-\.]\d{2}[\/\-\.]\d{4})\b/,
-    // Year of Birth (Aadhaar sometimes shows only year)
+    // PAN card shows date as DD/MM/YYYY after "Date of Birth" line
+    /(\d{2}[\/\-\.]\d{2}[\/\-\.]\d{4})/,
     /\bYear\s*of\s*Birth\s*[:\-]?\s*(\d{4})\b/i,
     /\bYOB\s*[:\-]?\s*(\d{4})\b/i,
-    // Age-based extraction: sometimes shows Age: XX
     /\bAge\s*[:\-]\s*(\d{1,3})\b/i,
   ];
 
@@ -883,27 +1231,20 @@ function showOCRResult(rawText, confidence){
     var m=text.match(dobPatterns[pi]);
     if(!m) continue;
     var val=m[1];
-
     if(dobPatterns[pi].source.indexOf('Age')>-1){
-      // Age-based: calculate approximate birth year
       var yr=new Date().getFullYear()-parseInt(val);
-      dobISO=yr+'-01-01'; dobRaw='~Age '+val+' (Born ~'+yr+')';
-      break;
+      dobISO=yr+'-01-01'; dobRaw='~Age '+val+' (Born ~'+yr+')'; break;
     }
-
     var parts=val.split(/[\/\-\.]/);
     if(parts.length===3){
       if(parts[2].length===4){
-        // DD/MM/YYYY
         dobISO=parts[2]+'-'+parts[1].padStart(2,'0')+'-'+parts[0].padStart(2,'0');
         dobRaw=val; break;
       } else if(parts[0].length===4){
-        // YYYY/MM/DD
         dobISO=parts[0]+'-'+parts[1].padStart(2,'0')+'-'+parts[2].padStart(2,'0');
         dobRaw=val; break;
       }
     } else if(parts.length===1&&val.length===4){
-      // Year only
       dobISO=val+'-01-01'; dobRaw='Year: '+val; break;
     }
   }
@@ -913,16 +1254,14 @@ function showOCRResult(rawText, confidence){
   if(dobISO&&reg.dob){
     var regDate=new Date(reg.dob), extDate=new Date(dobISO);
     var diffMs=Math.abs(regDate-extDate);
-    dobMatch = diffMs < 2*24*60*60*1000;  // within 2 days
-    // Year-only match (partial)
+    dobMatch = diffMs < 2*24*60*60*1000;
     if(!dobMatch && dobISO.slice(0,4)===reg.dob.slice(0,4)) dobPartial=true;
   }
 
-  // ── Name match ──────────────────────────────────────────────
-  var nameMatch=false, foundName='', bestScore=0;
+  // ── Name match (scored 0–1) ──────────────────────────────────
+  var foundName='', bestScore=0;
   var lines=text.split('\n');
   var regWords=reg.name.toUpperCase().split(/\s+/).filter(function(w){return w.length>1;});
-
   for(var li=0;li<lines.length;li++){
     var lineUp=lines[li].toUpperCase().replace(/[^A-Z\s]/g,'').trim();
     if(lineUp.length<3) continue;
@@ -931,62 +1270,184 @@ function showOCRResult(rawText, confidence){
     var score=hits/Math.max(1,regWords.length);
     if(score>bestScore){bestScore=score;foundName=lines[li].trim();}
   }
-  nameMatch=bestScore>=0.6;
+  var nameMatch = bestScore>=0.8;
 
-  // ── Document authenticity markers ───────────────────────────
+  // ── Doc type authentication ─────────────────────────────────
   var hasAuthMarker = proofType==='aadhaar'
     ? (detectedAadhaar||!!aadhaarNum)
-    : (detectedCollege||nameMatch);
+    : proofType==='pan'
+    ? (detectedPAN||!!panNum)
+    : true; // College ID — no specific marker needed
 
-  // ── Overall decision ────────────────────────────────────────
-  // DOB must match (or partial) to accept
-  var accepted = dobMatch || (dobPartial && nameMatch);
-  var confidence_pct = Math.round(confidence||0);
+  // ── SCORING ────────────────────────────────────────────────
+  var isCollege = (proofType === 'college');
+  var scoreTotal = 0;
+  if(dobMatch)        scoreTotal += 55;
+  else if(dobPartial) scoreTotal +=  5;
+  else if(isCollege)  scoreTotal += 30; // College: no DOB is acceptable
+  scoreTotal += Math.round(bestScore * 35);
+  if(hasAuthMarker)   scoreTotal += 10;
+  scoreTotal = Math.min(100, scoreTotal);
 
-  // ── Build result HTML ────────────────────────────────────────
-  var boxClass = accepted ? 'ok' : (dobPartial ? 'warn' : 'fail');
-  var html='<div class="ocr-box '+boxClass+'">';
-  html+='<div style="font-weight:800;font-size:13px;margin-bottom:12px;color:'+(accepted?'#15803d':dobPartial?'#92400e':'#b91c1c')+'">'+(accepted?'✅ Document Verified':dobPartial?'⚠️ Partial Match':'❌ Verification Failed')+'</div>';
+  // College only needs 80% name match; Aadhaar/PAN need full DOB + 80% overall
+  var accepted = isCollege ? (bestScore >= 0.8) : (dobMatch && scoreTotal >= 80);
 
-  // Name row
-  html+='<div class="ocr-row"><span class="ocr-k">Name</span><span class="ocr-v">'+(foundName||'Not detected')+'</span><span class="tag '+(nameMatch?'ok':'fail')+'">'+(nameMatch?'Match':'No match')+'</span></div>';
+  // ── Registered DOB formatted nicely ─────────────────────────
+  var regDobFmt = reg.dob ? (function(){
+    var p=reg.dob.split('-'); return p.length===3?p[2]+'/'+p[1]+'/'+p[0]:reg.dob;
+  })() : '—';
 
-  // DOB row
-  html+='<div class="ocr-row"><span class="ocr-k">DOB</span><span class="ocr-v">'+(dobRaw||'Not found')+'</span><span class="tag '+(dobMatch?'ok':dobPartial?'warn':'fail')+'">'+(dobMatch?'Match':dobPartial?'Year match':'No match')+'</span></div>';
+  // ── Name percentage for display ──────────────────────────────
+  var namePct = Math.round(bestScore * 100);
 
-  // Aadhaar number if found
-  if(aadhaarNum) html+='<div class="ocr-row"><span class="ocr-k">UID</span><span class="ocr-v" style="font-family:monospace;">****'+aadhaarNum.slice(-5)+'</span><span class="tag ok">Found</span></div>';
+  // ════════════════════════════════════════════════════════════
+  // BUILD RESULT HTML — Clear Name + DOB Verification Panels
+  // ════════════════════════════════════════════════════════════
+  var docTypeLabels = {aadhaar:'Aadhaar Card',pan:'PAN Card',college:'College ID Card'};
+  var docIcon = {aadhaar:'🪪',pan:'💳',college:'🎓'};
+  var html = '';
 
-  // Doc type
-  html+='<div class="ocr-row"><span class="ocr-k">Type</span><span class="ocr-v">'+(proofType==='aadhaar'?'Aadhaar Card':'College ID')+'</span><span class="tag '+(hasAuthMarker?'ok':'warn')+'">'+(hasAuthMarker?'Verified':'Check document')+'</span></div>';
-
-  // Registered info
-  html+='<div style="margin-top:10px;padding-top:10px;border-top:1px solid '+(accepted?'#bbf7d0':dobPartial?'#fde68a':'#fecaca')+';font-size:12px;color:#64748b;">';
-  html+='Registered as: <strong>'+reg.name+'</strong> · DOB: <strong>'+reg.dob+'</strong></div>';
-
-  // Confidence meter
-  html+='<div style="margin-top:8px;font-size:11px;color:#64748b;">OCR Confidence: '+confidence_pct+'%</div>';
-  html+='<div class="conf-bar"><div class="conf-fill" style="width:'+confidence_pct+'%;background:'+(confidence_pct>70?'#10b981':confidence_pct>40?'#f59e0b':'#ef4444')+'"></div></div>';
-  html+='</div>';
-
-  // Extra guidance
-  if(!dobMatch&&!dobPartial){
-    html+='<div class="al err" style="margin-top:8px;font-size:12px;">❌ DOB not found or doesn\'t match. Ensure DOB is fully visible, no glare, document is flat. Retake and try again.</div>';
-  } else if(dobPartial&&!accepted){
-    html+='<div class="al warn" style="margin-top:8px;font-size:12px;">⚠️ Only year matched. For stronger verification, show the full DOB line clearly.</div>';
-    accepted=true; // Allow proceed with partial match + name match
+  // ─── Overall status banner ─────────────────────────────────
+  if(accepted){
+    html += '<div style="background:linear-gradient(135deg,#f0fdf4,#dcfce7);border:2px solid #10b981;border-radius:14px;padding:16px;display:flex;align-items:center;gap:14px;margin-bottom:16px;">'
+      + '<div style="font-size:2.4rem;">✅</div>'
+      + '<div><div style="font-weight:900;font-size:15px;color:#15803d;">'+(docTypeLabels[proofType]||'Document')+' Verified!</div>'
+      + '<div style="font-size:12px;color:#16a34a;margin-top:3px;">Match score: <strong>'+scoreTotal+'%</strong> — All checks passed</div></div></div>';
+  } else {
+    var banner_icon = scoreTotal>=50?'⚠️':'❌';
+    var banner_bg   = scoreTotal>=50?'#fefce8,#fef9c3':'#fef2f2,#fee2e2';
+    var banner_bdr  = scoreTotal>=50?'#f59e0b':'#ef4444';
+    var banner_hd   = scoreTotal>=50?'#92400e':'#b91c1c';
+    var banner_sub  = scoreTotal>=50?'#a16207':'#dc2626';
+    html += '<div style="background:linear-gradient(135deg,'+banner_bg+');border:2px solid '+banner_bdr+';border-radius:14px;padding:16px;display:flex;align-items:center;gap:14px;margin-bottom:16px;">'
+      + '<div style="font-size:2.4rem;">'+banner_icon+'</div>'
+      + '<div><div style="font-weight:900;font-size:15px;color:'+banner_hd+';">Verification Failed</div>'
+      + '<div style="font-size:12px;color:'+banner_sub+';margin-top:3px;">Score: <strong>'+scoreTotal+'%</strong> — Need 80% to pass</div></div></div>';
   }
 
-  document.getElementById('ocrResult').innerHTML=html;
+  // ─── Overall score bar ─────────────────────────────────────
+  html += '<div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;padding:14px;margin-bottom:14px;">'
+    + '<div style="display:flex;justify-content:space-between;font-size:12px;font-weight:700;color:#64748b;margin-bottom:8px;">'
+    + '<span>Overall Match Score</span><span style="color:'+(accepted?'#15803d':scoreTotal>=50?'#92400e':'#b91c1c')+'">'+scoreTotal+'% / 100%</span></div>'
+    + '<div style="background:#e2e8f0;border-radius:99px;height:12px;overflow:hidden;">'
+    + '<div style="height:12px;border-radius:99px;transition:width .6s;width:'+scoreTotal+'%;background:'+(accepted?'linear-gradient(90deg,#10b981,#059669)':scoreTotal>=50?'linear-gradient(90deg,#f59e0b,#d97706)':'linear-gradient(90deg,#ef4444,#dc2626)')+'"></div></div>'
+    + '<div style="display:flex;justify-content:space-between;font-size:10px;color:#94a3b8;margin-top:4px;"><span>0%</span><span style="color:#f59e0b;">80% threshold</span><span>100%</span></div>'
+    + '</div>';
 
-  var acc=document.getElementById('btnAccept');
-  if(accepted){acc.style.display='flex';}
-  else{acc.style.display='none';}
+  // ─── NAME Verification Panel ───────────────────────────────
+  html += '<div style="border:2px solid '+(nameMatch?'#10b981':'#ef4444')+';border-radius:14px;overflow:hidden;margin-bottom:12px;">'
+    // Header
+    + '<div style="background:'+(nameMatch?'#f0fdf4':'#fef2f2')+';padding:12px 16px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid '+(nameMatch?'#bbf7d0':'#fecaca')+';">'
+    + '<div style="display:flex;align-items:center;gap:8px;">'
+    + '<span style="font-size:1.2rem;">👤</span>'
+    + '<span style="font-weight:800;font-size:13px;color:#0f172a;">Name Verification</span>'
+    + '</div>'
+    + '<div style="display:flex;align-items:center;gap:6px;">'
+    + '<span style="font-size:10px;font-weight:800;padding:3px 10px;border-radius:99px;background:'+(nameMatch?'#dcfce7':'#fee2e2')+';color:'+(nameMatch?'#15803d':'#b91c1c')+'">'+(nameMatch?'MATCHED':'NOT MATCHED')+'</span>'
+    + '<span style="font-size:11px;font-weight:700;color:'+(nameMatch?'#15803d':'#b91c1c')+'">'+namePct+'%</span>'
+    + '</div></div>'
+    // Body
+    + '<div style="padding:14px 16px;">'
+    // Registered name row
+    + '<div style="margin-bottom:10px;">'
+    + '<div style="font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.06em;color:#64748b;margin-bottom:4px;">📋 Your Registered Name</div>'
+    + '<div style="font-size:15px;font-weight:800;color:#0f172a;background:#f1f5f9;padding:10px 14px;border-radius:8px;">'+reg.name+'</div>'
+    + '</div>'
+    // Extracted name row
+    + '<div style="margin-bottom:10px;">'
+    + '<div style="font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.06em;color:#64748b;margin-bottom:4px;">🔍 Extracted from '+(docTypeLabels[proofType]||'Document')+'</div>'
+    + '<div style="font-size:15px;font-weight:800;color:'+(foundName?'#0f172a':'#94a3b8')+';background:#f1f5f9;padding:10px 14px;border-radius:8px;">'+(foundName||'Could not read name from image')+'</div>'
+    + '</div>'
+    // Name match bar
+    + '<div style="font-size:11px;color:#64748b;margin-bottom:5px;font-weight:700;">Word Match: '+namePct+'% (need ≥80%)</div>'
+    + '<div style="background:#e2e8f0;border-radius:99px;height:8px;overflow:hidden;">'
+    + '<div style="height:8px;border-radius:99px;width:'+namePct+'%;background:'+(nameMatch?'#10b981':namePct>=50?'#f59e0b':'#ef4444')+'"></div></div>'
+    + '</div></div>';
+
+  // ─── DOB Verification Panel ────────────────────────────────
+  var dobColor = dobMatch?'#10b981':dobPartial?'#f59e0b':'#ef4444';
+  var dobBg    = dobMatch?'#f0fdf4':dobPartial?'#fefce8':'#fef2f2';
+  var dobBdr   = dobMatch?'#bbf7d0':dobPartial?'#fde68a':'#fecaca';
+  var dobHdBg  = dobMatch?'#f0fdf4':dobPartial?'#fefce8':'#fef2f2';
+  var dobStatus= dobMatch?'MATCHED':dobPartial?'YEAR ONLY':'NOT FOUND';
+  var dobStatusBg = dobMatch?'#dcfce7':dobPartial?'#fef9c3':'#fee2e2';
+  var dobStatusC  = dobMatch?'#15803d':dobPartial?'#92400e':'#b91c1c';
+
+  html += '<div style="border:2px solid '+dobColor+';border-radius:14px;overflow:hidden;margin-bottom:12px;">'
+    // Header
+    + '<div style="background:'+dobHdBg+';padding:12px 16px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid '+dobBdr+';">'
+    + '<div style="display:flex;align-items:center;gap:8px;">'
+    + '<span style="font-size:1.2rem;">🎂</span>'
+    + '<span style="font-weight:800;font-size:13px;color:#0f172a;">Date of Birth Verification'+(isCollege?' (Optional)':'')+'</span>'
+    + '</div>'
+    + '<span style="font-size:10px;font-weight:800;padding:3px 10px;border-radius:99px;background:'+dobStatusBg+';color:'+dobStatusC+'">'+dobStatus+'</span>'
+    + '</div>'
+    // Body
+    + '<div style="padding:14px 16px;">'
+    + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:10px;">'
+    // Registered DOB
+    + '<div><div style="font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.06em;color:#64748b;margin-bottom:4px;">📋 Registered DOB</div>'
+    + '<div style="font-size:18px;font-weight:900;color:#0f172a;font-family:monospace;background:#f1f5f9;padding:10px 14px;border-radius:8px;text-align:center;">'+regDobFmt+'</div></div>'
+    // Extracted DOB
+    + '<div><div style="font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.06em;color:#64748b;margin-bottom:4px;">🔍 Found on Document</div>'
+    + '<div style="font-size:18px;font-weight:900;color:'+(dobRaw?'#0f172a':'#94a3b8')+';font-family:monospace;background:#f1f5f9;padding:10px 14px;border-radius:8px;text-align:center;">'+(dobRaw||'—')+'</div></div>'
+    + '</div>';
+
+  if(dobMatch){
+    html += '<div style="display:flex;align-items:center;gap:8px;font-size:12px;font-weight:700;color:#15803d;"><span>✅</span> Date of birth matches perfectly</div>';
+  } else if(dobPartial){
+    html += '<div style="display:flex;align-items:center;gap:8px;font-size:12px;font-weight:700;color:#92400e;"><span>⚠️</span> Only birth year matched — full DD/MM/YYYY must be visible</div>';
+  } else if(isCollege){
+    html += '<div style="display:flex;align-items:center;gap:8px;font-size:12px;font-weight:700;color:#64748b;"><span>ℹ️</span> DOB not found — OK for College ID, name match is sufficient</div>';
+  } else {
+    html += '<div style="display:flex;align-items:center;gap:8px;font-size:12px;font-weight:700;color:#b91c1c;"><span>❌</span> DOB not found — ensure full date DD/MM/YYYY is clearly visible</div>';
+  }
+  html += '</div></div>';
+
+  // ─── Document Details Panel ────────────────────────────────
+  html += '<div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;padding:12px 16px;margin-bottom:12px;">'
+    + '<div style="font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.06em;color:#64748b;margin-bottom:10px;">📄 Document Details</div>'
+    + '<div style="display:flex;gap:10px;flex-wrap:wrap;">';
+
+  if(aadhaarNum) html += '<div style="background:#eef2ff;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:700;color:#4338ca;">🪪 UID: ****'+aadhaarNum.replace(/\s/g,'').slice(-5)+'</div>';
+  if(panNum)     html += '<div style="background:#f0fdf4;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:700;color:#15803d;">💳 PAN: '+panNum.slice(0,5)+'*****</div>';
+
+  var docLabel2 = docTypeLabels[proofType]||'Document';
+  html += '<div style="background:'+(hasAuthMarker?'#f0fdf4':'#fef9c3')+';border-radius:8px;padding:6px 12px;font-size:12px;font-weight:700;color:'+(hasAuthMarker?'#15803d':'#92400e')+'">'
+    + (docIcon[proofType]||'📄')+' '+(hasAuthMarker?docLabel2+' Detected ✓':docLabel2+' — check photo')+' </div>';
+
+  // OCR confidence chip
+  var conf_pct = Math.round(confidence||0);
+  html += '<div style="background:#f1f5f9;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:700;color:#64748b;">🔎 OCR: '+conf_pct+'%</div>';
+  html += '</div></div>';
+
+  // ─── Failure guidance ─────────────────────────────────────
+  if(!accepted){
+    html += '<div class="al '+(scoreTotal>=50?'warn':'err')+'" style="font-size:12px;margin-bottom:6px;">';
+    if(isCollege && !nameMatch){
+      html += '❌ <strong>Name match is '+namePct+'% (need 80%).</strong> Make sure your full name on the College ID matches your registered name exactly. Try better lighting or a clearer photo.';
+    } else if(!isCollege && !dobMatch && !dobPartial){
+      html += '❌ <strong>Date of birth not found.</strong> Ensure the full date (DD/MM/YYYY) is clearly visible on the document. Retake or upload a clearer image.';
+    } else if(!isCollege && dobPartial){
+      html += '⚠️ <strong>Only birth year matched.</strong> The full date DD/MM/YYYY must be clearly readable. Retake or upload a sharper photo.';
+    } else if(!nameMatch){
+      html += '⚠️ <strong>Name match is '+namePct+'% (need 80%).</strong> Your registered name "<strong>'+reg.name+'</strong>" must appear clearly on the document. Retake or upload a clearer image.';
+    } else {
+      html += '⚠️ <strong>Overall score '+scoreTotal+'% (need 80%).</strong> Ensure name and date of birth are both clearly visible. Retake or upload a better photo.';
+    }
+    html += '</div>';
+  }
+
+  document.getElementById('ocrResult').innerHTML = html;
+  document.getElementById('btnAccept').style.display = accepted ? 'flex' : 'none';
 }
 
 function acceptProof(){
-  proofOK=true; reg.proofType=proofType;
-  stopDocCam(); goStep(4); loadFaceStep();
+  proofOK = true;
+  reg.proofType = proofType;
+  stopDocCam();
+  goStep(4);
+  loadFaceStep();
 }
 
 function retryDoc(){
@@ -997,177 +1458,412 @@ function retryDoc(){
   document.getElementById('btnCap').disabled=false;
   document.getElementById('btnCap').innerHTML='📸 Capture';
   document.getElementById('docFrame').className='doc-frame';
-  openDocCam();
+  switchTab(isMobile?'cam':'upload');
 }
 
 // ════════════════════════════════════════════════════════════
-// STEP 4 — Face
+// STEP 4 — Face  (FAST: camera first, AI in background)
 // ════════════════════════════════════════════════════════════
+var autoCountdown=null;  // interval for the 3-2-1 countdown
+var capturedCanvas=null; // the snapped canvas, held until AI finishes
+var aiReady=false;       // true once face-api models are loaded
+
 async function loadFaceStep(){
-  showFacePanel('load');
-  setAI('Starting camera…',8);
-  try{
-    faceStream=await navigator.mediaDevices.getUserMedia({
-      video:{facingMode:facingMode,width:{ideal:1280},height:{ideal:960},frameRate:{ideal:30},
-        advanced:[{exposureMode:'continuous'},{whiteBalanceMode:'continuous'}]}
-    }).catch(function(){return navigator.mediaDevices.getUserMedia({video:{facingMode:facingMode}});});
-  }catch(e){
-    showFacePanel('cam');
-    al('e4','err','📷 Camera blocked. Allow camera permission and refresh.');
+  al('e4','','');
+  faceCapturing=false; finalDesc=null; faceDescs=[];
+  capturedCanvas=null; clearInterval(autoCountdown);
+
+  if(availableCameras.length===0) await detectCameras();
+  populateFaceCameraSelect();
+
+  // Auto-pick best camera on desktop
+  if(!isMobile && !faceCameraId){
+    var best=availableCameras.find(function(c){
+      return /integrated|built.?in|hd webcam|hp|laptop/i.test(c.label)&&
+             !/virtual|vivo|obs|phone|android|iphone|mirror/i.test(c.label);
+    })||availableCameras.find(function(c){
+      return !/virtual|vivo|obs|phone|android|iphone|mirror/i.test(c.label);
+    });
+    if(best) faceCameraId=best.deviceId;
+    var sel=document.getElementById('faceCamSelect');
+    if(sel&&faceCameraId) sel.value=faceCameraId;
+  }
+
+  // ── Start camera FIRST (don't wait for AI) ─────────────────
+  showFacePanel('cam');
+  await openFaceCam();
+
+  // ── Start 3-2-1 auto countdown in background ───────────────
+  startAutoCountdown();
+
+  // ── Load AI models in background ───────────────────────────
+  loadFaceAIBackground();
+}
+
+async function openFaceCam(){
+  var fallbacks;
+  if(faceCameraId){
+    fallbacks=[
+      {video:{deviceId:{exact:faceCameraId},width:{ideal:1280},height:{ideal:720}}},
+      {video:{deviceId:{exact:faceCameraId},width:{ideal:640},height:{ideal:480}}},
+      {video:{deviceId:{exact:faceCameraId}}},
+    ];
+  }else if(isMobile){
+    fallbacks=[
+      {video:{facingMode:facingMode,width:{ideal:1280},height:{ideal:960}}},
+      {video:{facingMode:facingMode,width:{ideal:640},height:{ideal:480}}},
+      {video:{facingMode:facingMode}},
+    ];
+  }else{
+    fallbacks=[{video:{width:{ideal:1280},height:{ideal:720}}},{video:{width:{ideal:640},height:{ideal:480}}},{video:true}];
+  }
+
+  faceStream=null;
+  for(var i=0;i<fallbacks.length;i++){
+    try{ faceStream=await navigator.mediaDevices.getUserMedia(fallbacks[i]); break; }
+    catch(e){ console.warn('Face cam fallback',i+1,'failed:',e.message); }
+  }
+
+  if(!faceStream){
+    al('e4','err','❌ Camera could not start. Close Zoom/Teams, then click Retry Camera below.');
+    document.getElementById('btnRetryFace').style.display='block';
     return;
   }
-  var v=document.getElementById('faceVid');v.srcObject=faceStream;v.play();
-  applyFaceFilter();
-  if(typeof faceapi==='undefined'){
-    setAI('Loading face-api…',12);
-    await loadScript('https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/dist/face-api.min.js');
-  }
-  await loadFaceModels();
-}
 
-function showFacePanel(p){
-  document.getElementById('s4a').style.display=p==='load'?'block':'none';
-  document.getElementById('s4b').style.display=p==='cam'?'block':'none';
-  document.getElementById('s4c').style.display=p==='prev'?'block':'none';
-}
-function setAI(t,p){var a=document.getElementById('aiTxt');if(a)a.textContent=t;var b=document.getElementById('aiBar');if(b)b.style.width=p+'%';}
-function applyFaceFilter(){
   var v=document.getElementById('faceVid');
-  if(v) v.style.filter=faceBoostOn?'brightness(2.2) contrast(1.6)':'brightness(1.5) contrast(1.25)';
-}
-function flipFaceCam(){stopFaceCam();facingMode=facingMode==='user'?'environment':'user';loadFaceStep();}
-function toggleFaceBoost(){faceBoostOn=!faceBoostOn;document.getElementById('faceBoost').classList.toggle('on',faceBoostOn);applyFaceFilter();}
+  v.srcObject=faceStream; v.play();
+  applyFaceFilter();
+  startFaceLuxLoop();
 
-async function loadFaceModels(){
-  if(faceModels){onFaceReady();return;}
+  var flipBtn=document.getElementById('btnFlipFace');
+  if(flipBtn) flipBtn.style.display=isMobile?'flex':'none';
+
+  // Black-screen auto-fix after 2s
+  setTimeout(async function(){
+    if(!faceStream) return;
+    var v2=document.getElementById('faceVid');
+    if(getFaceLum(v2)<6){
+      stopFaceCam();
+      try{
+        var bare=faceCameraId?{video:{deviceId:{exact:faceCameraId}}}:{video:true};
+        faceStream=await navigator.mediaDevices.getUserMedia(bare);
+        v2.srcObject=faceStream; v2.play(); applyFaceFilter(); startFaceLuxLoop();
+      }catch(e){
+        al('e4','err','Camera is black. <button onclick="retryFaceCamera()" style="background:#4f46e5;color:white;border:none;border-radius:6px;padding:4px 12px;font-weight:700;cursor:pointer;margin-left:4px;">Retry Camera</button>');
+      }
+    }
+  },2000);
+}
+
+// ── Lux meter loop (lightweight — no AI) ───────────────────────
+var luxLoop=null;
+function startFaceLuxLoop(){
+  clearInterval(luxLoop);
+  luxLoop=setInterval(function(){
+    var v=document.getElementById('faceVid');
+    if(!v||!v.videoWidth) return;
+    measureFaceLux(v);
+  },800);
+}
+
+// ── Auto countdown: 3 → 2 → 1 → SNAP ──────────────────────────
+function startAutoCountdown(){
+  clearInterval(autoCountdown);
+  var sec=3;
+  // Brief delay so camera has time to show a frame
+  setTimeout(function(){
+    if(faceCapturing||capturedCanvas) return;
+    updateCountdown(sec);
+    autoCountdown=setInterval(function(){
+      if(faceCapturing||capturedCanvas){clearInterval(autoCountdown);hideCountdown();return;}
+      sec--;
+      if(sec>0){
+        updateCountdown(sec);
+      }else{
+        clearInterval(autoCountdown);
+        hideCountdown();
+        snapFace(); // auto-snap!
+      }
+    },1000);
+  },1500);
+}
+
+function updateCountdown(n){
+  var ov=document.getElementById('cntdOverlay');
+  var nm=document.getElementById('cntdNum');
+  var ft=document.getElementById('faceTxt');
+  if(ov){ ov.style.display='flex'; }
+  if(nm){ nm.textContent=n; }
+  if(ft){ ft.textContent='Hold still — snapping in '+n+'…'; }
+  // Flash oval green to signal ready
+  var oval=document.getElementById('faceOval');
+  if(oval) oval.className='oval rdy';
+}
+
+function hideCountdown(){
+  var ov=document.getElementById('cntdOverlay');
+  if(ov) ov.style.display='none';
+}
+
+// ── Snap: takes instant photo from video ────────────────────────
+async function snapFace(){
+  if(faceCapturing) return;
+  clearInterval(autoCountdown);
+  hideCountdown();
+
+  var vid=document.getElementById('faceVid');
+  if(!vid||!vid.videoWidth){
+    al('e4','err','Camera not ready. Wait a moment or click Retry Camera.');
+    return;
+  }
+  if(getFaceLum(vid)<6){
+    al('e4','err','Camera is black. Close other apps using the camera, then Retry Camera.');
+    document.getElementById('btnRetryFace').style.display='block';
+    return;
+  }
+
+  faceCapturing=true;
+  document.getElementById('btnFace').disabled=true;
+  document.getElementById('faceTxt').textContent='📸 Captured!';
+  document.getElementById('faceOval').className='oval rdy';
+
+  // Draw frame to canvas
+  var cnv=document.createElement('canvas');
+  cnv.width=vid.videoWidth; cnv.height=vid.videoHeight;
+  var ctx=cnv.getContext('2d');
+  // Mirror-correct for front camera on laptop
+  var track=faceStream&&faceStream.getVideoTracks()[0];
+  var settings=track?track.getSettings():{};
+  var isEnv=settings.facingMode==='environment'||(!isMobile&&facingMode!=='user');
+  if(!isMobile&&!isEnv){ ctx.save();ctx.translate(cnv.width,0);ctx.scale(-1,1); }
+  // Light boost
+  var bri=faceLux<80?2.0:faceLux<130?1.6:1.3;
+  ctx.filter='brightness('+bri+') contrast(1.3)';
+  ctx.drawImage(vid,0,0);
+  if(!isMobile&&!isEnv) ctx.restore();
+
+  capturedCanvas=cnv;
+
+  // Show preview immediately
+  var dispCnv=document.getElementById('faceCanvas');
+  dispCnv.width=cnv.width; dispCnv.height=cnv.height;
+  dispCnv.getContext('2d').drawImage(cnv,0,0);
+
+  stopFaceCam();
+  clearInterval(luxLoop);
+
+  // Switch to "processing" panel, run AI on captured frame
+  showFacePanel('proc');
+  setProc('Analysing face…', 20);
+  await computeDescriptor(cnv);
+}
+
+// ── AI descriptor computation (runs after snap) ─────────────────
+async function computeDescriptor(cnv){
+  // If AI not loaded yet, wait for it (up to 15s more)
+  if(!aiReady||typeof faceapi==='undefined'){
+    setProc('Waiting for AI to finish loading…', 35);
+    for(var wi=0;wi<30;wi++){
+      if(aiReady&&typeof faceapi!=='undefined') break;
+      await new Promise(function(r){setTimeout(r,500);});
+    }
+  }
+
+  if(!aiReady||typeof faceapi==='undefined'){
+    // AI never loaded — use pixel fingerprint fallback
+    setProc('AI unavailable — using photo fingerprint…', 80);
+    finalDesc=pixelFP(cnv);
+    await new Promise(function(r){setTimeout(r,600);});
+    setProc('Done!', 100);
+    await new Promise(function(r){setTimeout(r,300);});
+    showFacePanel('prev');
+    faceCapturing=false;
+    return;
+  }
+
+  try{
+    setProc('Detecting face…', 50);
+    // Try all quality levels for robustness
+    var det=null;
+    var opts=[
+      window._tiny?new faceapi.TinyFaceDetectorOptions({inputSize:320,scoreThreshold:0.18}):new faceapi.SsdMobilenetv1Options({minConfidence:0.18}),
+      window._tiny?new faceapi.TinyFaceDetectorOptions({inputSize:224,scoreThreshold:0.10}):new faceapi.SsdMobilenetv1Options({minConfidence:0.10}),
+      window._tiny?new faceapi.TinyFaceDetectorOptions({inputSize:160,scoreThreshold:0.05}):new faceapi.SsdMobilenetv1Options({minConfidence:0.05}),
+    ];
+    for(var qi=0;qi<opts.length&&!det;qi++){
+      try{
+        var tmo=new Promise(function(_,rej){setTimeout(function(){rej(new Error('timeout'));},3000);});
+        det=await Promise.race([
+          faceapi.detectSingleFace(cnv,opts[qi]).withFaceLandmarks().withFaceDescriptor(),
+          tmo
+        ]);
+      }catch(e){ /* try next */ }
+    }
+
+    setProc('Computing face data…', 80);
+
+    if(det&&det.descriptor){
+      finalDesc=det.descriptor;
+      if(isBlackDescriptor(finalDesc)){
+        // Fallback to pixel FP
+        finalDesc=pixelFP(cnv);
+        al('e4','warn','⚠️ Face data quality low — proceed or retake for better accuracy.');
+      }
+    } else {
+      // Face not detected — still proceed with pixel FP so user isn't blocked
+      finalDesc=pixelFP(cnv);
+      al('e4','warn','⚠️ Face AI could not detect face features — photo saved. Proceed or retake.');
+    }
+
+    setProc('Done!', 100);
+    await new Promise(function(r){setTimeout(r,300);});
+    showFacePanel('prev');
+    faceCapturing=false;
+
+  }catch(err){
+    console.error('Descriptor error:', err);
+    finalDesc=pixelFP(cnv);
+    setProc('Done (fallback)!', 100);
+    await new Promise(function(r){setTimeout(r,300);});
+    showFacePanel('prev');
+    faceCapturing=false;
+  }
+}
+
+// ── AI background loader ────────────────────────────────────────
+async function loadFaceAIBackground(){
+  if(aiReady) return;
+  var statusTxt=document.getElementById('aiStatusTxt');
+  var spinner=document.getElementById('aiSpinner');
+  function setStatus(t){ if(statusTxt) statusTxt.textContent=t; }
+
+  // Load script
+  if(typeof faceapi==='undefined'){
+    setStatus('Loading face AI (1/4)…');
+    try{
+      await loadScript('https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/dist/face-api.min.js');
+    }catch(e){
+      setStatus('⚠️ AI load failed — photo-only mode');
+      if(spinner) spinner.style.display='none';
+      return;
+    }
+  }
+
   var cdns=[CDN1,CDN2];
   for(var ci=0;ci<cdns.length;ci++){
     try{
-      setAI('Loading detector…',30);await faceapi.nets.ssdMobilenetv1.loadFromUri(cdns[ci]);
-      setAI('Loading landmarks…',58);await faceapi.nets.faceLandmark68Net.loadFromUri(cdns[ci]);
-      setAI('Loading recognition…',82);await faceapi.nets.faceRecognitionNet.loadFromUri(cdns[ci]);
-      faceModels=true;setAI('✅ Ready!',100);setTimeout(onFaceReady,300);return;
-    }catch(e){}
+      setStatus('Loading detector (2/4)…');
+      await faceapi.nets.tinyFaceDetector.loadFromUri(cdns[ci]);
+      setStatus('Loading landmarks (3/4)…');
+      await faceapi.nets.faceLandmark68TinyNet.loadFromUri(cdns[ci]);
+      setStatus('Loading recognition (4/4)…');
+      await faceapi.nets.faceRecognitionNet.loadFromUri(cdns[ci]);
+      aiReady=true; window._tiny=true;
+      setStatus('✅ Face AI ready');
+      if(spinner){ spinner.style.display='none'; }
+      // If we already captured, run descriptor now
+      if(capturedCanvas&&faceCapturing===false&&finalDesc&&isBlackDescriptor(finalDesc)){
+        setStatus('Improving accuracy…');
+        await computeDescriptor(capturedCanvas);
+      }
+      return;
+    }catch(e){ console.warn('AI CDN',ci,'failed:',e.message); setStatus('Trying backup server…'); }
   }
-  // Tiny fallback
+
+  // Try SSD fallback
   for(var ci2=0;ci2<cdns.length;ci2++){
     try{
-      await faceapi.nets.tinyFaceDetector.loadFromUri(cdns[ci2]);
-      await faceapi.nets.faceLandmark68TinyNet.loadFromUri(cdns[ci2]);
+      setStatus('Loading detector (2/4)…');
+      await faceapi.nets.ssdMobilenetv1.loadFromUri(cdns[ci2]);
+      setStatus('Loading landmarks (3/4)…');
+      await faceapi.nets.faceLandmark68Net.loadFromUri(cdns[ci2]);
+      setStatus('Loading recognition (4/4)…');
       await faceapi.nets.faceRecognitionNet.loadFromUri(cdns[ci2]);
-      faceModels=true;window._tiny=true;setTimeout(onFaceReady,300);return;
-    }catch(e){}
-  }
-  al('e4','warn','⚠️ AI unavailable. Using manual capture.');
-  showFacePanel('cam');
-  var b=document.getElementById('btnFace');b.disabled=false;b.textContent='📷 Manual Capture';b.onclick=manualFace;
-}
-
-function onFaceReady(){
-  showFacePanel('cam'); startFaceLoop();
-  setTimeout(function(){if(document.getElementById('btnFace').disabled)document.getElementById('btnManual').style.display='flex';},18000);
-}
-
-function getOpts(sz){
-  sz=sz||512;
-  return window._tiny
-    ?new faceapi.TinyFaceDetectorOptions({inputSize:sz,scoreThreshold:0.25})
-    :new faceapi.SsdMobilenetv1Options({minConfidence:0.28});
-}
-
-function startFaceLoop(){
-  var vid=document.getElementById('faceVid');
-  faceLoop=setInterval(async function(){
-    if(!vid.videoWidth||faceCapturing)return;
-    measureFaceLux(vid);
-    try{
-      var f=enhanceFrame(vid);
-      var det=await faceapi.detectSingleFace(f,getOpts()).withFaceLandmarks()
-             ||await faceapi.detectSingleFace(vid,getOpts()).withFaceLandmarks();
-      if(det){
-        document.getElementById('faceOval').className='oval rdy';
-        document.getElementById('faceTxt').textContent='✅ Face detected! Tap Start Face Scan';
-        document.getElementById('btnFace').disabled=false;
-        document.getElementById('btnManual').style.display='none';
-      }else{
-        document.getElementById('faceOval').className='oval';
-        document.getElementById('faceTxt').textContent=faceLux<60?'🌙 Too dark — tap ☀️ or move to light':'👤 Align face inside the oval';
-        document.getElementById('btnFace').disabled=true;
-      }
-    }catch(e){}
-  },300);
-}
-
-async function captureFace(){
-  if(faceCapturing)return;
-  faceCapturing=true;faceDescs=[];
-  clearInterval(faceLoop);
-  document.getElementById('btnFace').disabled=true;
-  document.getElementById('faceDots').style.display='flex';
-  var vid=document.getElementById('faceVid'),snap=null;
-  for(var i=0;i<3;i++){
-    setDot(i);
-    document.getElementById('faceTxt').textContent='📸 Frame '+(i+1)+' of 3…';
-    var f=enhanceFrame(vid);
-    var det=await faceapi.detectSingleFace(f,getOpts(640)).withFaceLandmarks().withFaceDescriptor()
-           ||await faceapi.detectSingleFace(vid,getOpts(640)).withFaceLandmarks().withFaceDescriptor();
-    if(!det){
-      faceCapturing=false;
-      document.getElementById('faceDots').style.display='none';
-      document.getElementById('faceOval').className='oval bad';
-      document.getElementById('faceTxt').textContent='❌ Face lost — hold still and retry';
-      document.getElementById('btnFace').disabled=false;
-      setTimeout(function(){document.getElementById('faceOval').className='oval';startFaceLoop();},2000);
+      aiReady=true;
+      setStatus('✅ Face AI ready');
+      if(spinner){ spinner.style.display='none'; }
       return;
-    }
-    faceDescs.push(det.descriptor);if(i===0)snap=vid;
-    await new Promise(function(r){setTimeout(r,300);});
+    }catch(e2){ console.warn('SSD CDN',ci2,'failed:',e2.message); }
   }
-  for(var j=0;j<3;j++)document.getElementById('d'+j).className='dot f';
-  document.getElementById('faceTxt').textContent='✅ All 3 frames captured!';
-  await new Promise(function(r){setTimeout(r,500);});
-  finalDesc=avgDescs(faceDescs);
-  var cnv=document.getElementById('faceCanvas');
-  cnv.width=snap.videoWidth;cnv.height=snap.videoHeight;
-  var ctx=cnv.getContext('2d');ctx.filter='brightness(1.15)';ctx.drawImage(snap,0,0);
-  showFacePanel('prev');faceCapturing=false;
+  setStatus('⚠️ AI unavailable — photo-only mode active');
+  if(spinner){ spinner.style.display='none'; }
 }
 
-function setDot(active){
-  for(var j=0;j<3;j++) document.getElementById('d'+j).className='dot'+(j<active?' f':j===active?' a':'');
+// ── Pixel fingerprint fallback ──────────────────────────────────
+function isBlackDescriptor(desc){
+  if(!desc||desc.length!==128) return true;
+  var mn=desc[0],mx=desc[0];
+  for(var i=1;i<128;i++){if(desc[i]<mn)mn=desc[i];if(desc[i]>mx)mx=desc[i];}
+  var sum=0; for(var j=0;j<128;j++) sum+=desc[j];
+  return (mx-mn)<0.008||(sum/128)<0.001;
 }
 
-async function manualFace(){
-  faceCapturing=true;clearInterval(faceLoop);
-  var vid=document.getElementById('faceVid'),det=null;
-  var confs=[0.25,0.15,0.07];
-  for(var ci=0;ci<confs.length;ci++){
-    var o=window._tiny?new faceapi.TinyFaceDetectorOptions({inputSize:608,scoreThreshold:confs[ci]}):new faceapi.SsdMobilenetv1Options({minConfidence:confs[ci]});
-    det=await faceapi.detectSingleFace(enhanceFrame(vid),o).withFaceLandmarks().withFaceDescriptor()
-       ||await faceapi.detectSingleFace(vid,o).withFaceLandmarks().withFaceDescriptor();
-    if(det)break;
+function pixelFP(src){
+  var c=document.createElement('canvas'); c.width=16; c.height=16;
+  c.getContext('2d').drawImage(src,0,0,16,16);
+  var px=c.getContext('2d').getImageData(0,0,16,16).data;
+  var desc=new Float32Array(128);
+  for(var i=0;i<128;i++){
+    var b=i*2; desc[i]=(px[b*4]+px[b*4+1]+px[b*4+2])/765;
   }
-  finalDesc=det?det.descriptor:new Float32Array(pixelFP(vid));
-  if(!det)al('e4','warn','⚠️ Manual capture used — accuracy may be lower.');
-  var cnv=document.getElementById('faceCanvas');
-  cnv.width=vid.videoWidth||480;cnv.height=vid.videoHeight||360;
-  cnv.getContext('2d').drawImage(vid,0,0);
-  showFacePanel('prev');faceCapturing=false;
+  return desc;
 }
+
+// ── Utilities ───────────────────────────────────────────────────
+function setProc(t,p){
+  var el=document.getElementById('procTxt'); if(el) el.textContent=t;
+  var bar=document.getElementById('procBar'); if(bar) bar.style.width=p+'%';
+}
+
+function showFacePanel(p){
+  // s4a removed — go direct cam → proc → prev
+  var cam=document.getElementById('s4b');
+  var proc=document.getElementById('s4proc');
+  var prev=document.getElementById('s4c');
+  if(cam)  cam.style.display  = p==='cam'  ? 'block':'none';
+  if(proc) proc.style.display = p==='proc' ? 'block':'none';
+  if(prev) prev.style.display = p==='prev' ? 'block':'none';
+}
+
+function populateFaceCameraSelect(){
+  var wrap=document.getElementById('faceCamSelectWrap');
+  var sel=document.getElementById('faceCamSelect');
+  if(!wrap||availableCameras.length<=1){if(wrap)wrap.style.display='none';return;}
+  sel.innerHTML='';
+  availableCameras.forEach(function(cam){
+    var opt=document.createElement('option');
+    opt.value=cam.deviceId;
+    var isVirtual=/virtual|vivo|obs|snap|phone|android|iphone|mirror/i.test(cam.label);
+    var isBuiltIn=/integrated|built.?in|hd webcam|hp|laptop/i.test(cam.label);
+    opt.textContent=(isVirtual?'[Virtual] ':isBuiltIn?'[Webcam] ':'[Camera] ')+(cam.label||'Camera');
+    if(isBuiltIn&&!isVirtual) opt.selected=true;
+    sel.appendChild(opt);
+  });
+  if(faceCameraId) sel.value=faceCameraId;
+  wrap.style.display='block';
+}
+
+function applyFaceFilter(){
+  var v=document.getElementById('faceVid');
+  if(v) v.style.filter=faceBoostOn?'brightness(2.2) contrast(1.6)':'brightness(1.5) contrast(1.2)';
+}
+function flipFaceCam(){clearInterval(autoCountdown);stopFaceCam();facingMode=facingMode==='user'?'environment':'user';loadFaceStep();}
+function toggleFaceBoost(){faceBoostOn=!faceBoostOn;document.getElementById('faceBoost').classList.toggle('on',faceBoostOn);applyFaceFilter();}
+async function switchFaceCamera(){faceCameraId=document.getElementById('faceCamSelect').value;clearInterval(autoCountdown);stopFaceCam();await loadFaceStep();}
+async function retryFaceCamera(){faceCameraId=null;clearInterval(autoCountdown);stopFaceCam();await loadFaceStep();}
 
 function retakeFace(){
-  finalDesc=null;faceDescs=[];faceCapturing=false;
-  document.getElementById('faceDots').style.display='none';
+  finalDesc=null; faceDescs=[]; faceCapturing=false; capturedCanvas=null;
+  clearInterval(autoCountdown); clearInterval(luxLoop);
   document.getElementById('faceOval').className='oval';
-  document.getElementById('btnFace').disabled=true;
-  document.getElementById('btnFace').textContent='📸 Start Face Scan';
-  document.getElementById('btnFace').onclick=captureFace;
-  showFacePanel('cam');al('e4','','');startFaceLoop();
-  setTimeout(function(){if(document.getElementById('btnFace').disabled)document.getElementById('btnManual').style.display='flex';},18000);
+  document.getElementById('btnFace').disabled=false;
+  document.getElementById('btnRetryFace').style.display='none';
+  al('e4','','');
+  loadFaceStep();
 }
 
 function stopFaceCam(){
-  clearInterval(faceLoop);
+  clearInterval(luxLoop); clearInterval(autoCountdown);
   if(faceStream){faceStream.getTracks().forEach(function(t){t.stop();});faceStream=null;}
 }
 
@@ -1237,6 +1933,15 @@ function avgDescs(descs){
   for(var i=0;i<128;i++) out[i]/=descs.length;
   return out;
 }
+function getFaceLum(vid){
+  try{
+    var c=document.createElement('canvas');c.width=32;c.height=24;
+    c.getContext('2d').drawImage(vid,0,0,32,24);
+    var px=c.getContext('2d').getImageData(0,0,32,24).data,s=0;
+    for(var i=0;i<px.length;i+=4) s+=(px[i]+px[i+1]+px[i+2])/3;
+    return s/(px.length/4);
+  }catch(e){return 128;}
+}
 function enhanceFrame(vid){
   var c=document.createElement('canvas');c.width=vid.videoWidth||640;c.height=vid.videoHeight||480;
   var ctx=c.getContext('2d');
@@ -1256,12 +1961,6 @@ function measureFaceLux(vid){
     else if(faceLux<160){chip.textContent='💡 OK';chip.style.background='rgba(0,0,0,.6)';}
     else{chip.textContent='☀️ Good';chip.style.background='rgba(5,80,40,.85)';}
   }catch(e){}
-}
-function pixelFP(vid){
-  var c=document.createElement('canvas');c.width=64;c.height=64;
-  c.getContext('2d').drawImage(vid,0,0,64,64);
-  var px=c.getContext('2d').getImageData(0,0,64,64).data;
-  return Array.from({length:128},function(_,i){var idx=((i/128)*(px.length/4))|0;return(px[idx*4]+px[idx*4+1]+px[idx*4+2])/(255*3);});
 }
 function loadScript(src){
   return new Promise(function(res,rej){

@@ -180,6 +180,12 @@ app.post('/api/voter/register', registerLimit, (req,res)=>{
   if(faceDescriptor.some(v=>typeof v!=='number'||isNaN(v)||!isFinite(v)))
     return res.status(400).json({error:'Corrupted face data.'});
 
+  // Reject black-frame / flat descriptors (all values near 0 or near-identical)
+  const fd_min=Math.min(...faceDescriptor), fd_max=Math.max(...faceDescriptor);
+  const fd_mean=faceDescriptor.reduce((a,b)=>a+b,0)/faceDescriptor.length;
+  if((fd_max-fd_min)<0.02||fd_mean<0.005)
+    return res.status(400).json({error:'Face data is invalid — camera may have been black or covered. Please retake your photo.'});
+
   const otpRec=otpStore.get(cPhone);
   if(!otpRec||!otpRec.verified) return res.status(400).json({error:'Phone OTP verification required.'});
   if(!proofVerified)             return res.status(400).json({error:'ID document verification required.'});
