@@ -68,6 +68,9 @@
   if(location.search.includes('auth=required')){
     document.getElementById('alert').innerHTML='<div class="alert alert-warning">⚠️ Admin login required to access that page.</div>';
   }
+  if(location.search.includes('session=expired')){
+    document.getElementById('alert').innerHTML='<div class="alert alert-warning">⏱️ Session expired due to inactivity. Please log in again.</div>';
+  }
 
   function markFail(){
     failCount++;

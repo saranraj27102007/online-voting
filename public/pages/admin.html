@@ -9,6 +9,15 @@
 </head>
 <body>
 
+<!-- ── Auth Overlay: shown until session verified ── -->
+<div id="authOverlay" style="position:fixed;inset:0;background:#0f172a;z-index:9999;display:flex;align-items:center;justify-content:center;flex-direction:column;color:white;">
+  <div style="font-size:3.5rem;margin-bottom:16px;">🗳️</div>
+  <div style="font-weight:800;font-size:18px;margin-bottom:6px;">VoteSecure Admin</div>
+  <div style="font-size:13px;color:rgba(255,255,255,.45);margin-bottom:20px;">Verifying credentials…</div>
+  <div style="width:40px;height:40px;border:3px solid rgba(255,255,255,.15);border-top-color:white;border-radius:50%;animation:spinAuth .7s linear infinite;"></div>
+</div>
+<style>@keyframes spinAuth{to{transform:rotate(360deg);}}</style>
+
 <nav class="navbar">
   <a href="/" class="navbar-brand"><span class="logo">🗳️</span> VoteSecure <span class="badge badge-danger" style="font-size:11px; margin-left:4px;">ADMIN</span></a>
   <div class="nav-right">
@@ -229,12 +238,38 @@
 let adminData = {};
 let chartInstances = {};
 
+// ── Session timeout: auto-logout after 2 hours of inactivity ──
+var _idleTimer = null;
+var _IDLE_MS = 2 * 60 * 60 * 1000; // 2 hours
+function resetIdleTimer() {
+  clearTimeout(_idleTimer);
+  _idleTimer = setTimeout(function() {
+    fetch('/api/admin/logout', { method: 'POST' }).finally(function() {
+      window.location.replace('/admin-login?session=expired');
+    });
+  }, _IDLE_MS);
+}
+['click','keydown','mousemove','touchstart','scroll'].forEach(function(e) {
+  document.addEventListener(e, resetIdleTimer, { passive: true });
+});
+resetIdleTimer();
+
 async function init() {
-  const res = await fetch('/api/admin/me');
-  const data = await res.json();
-  if (!data.admin) return window.location.href = '/admin-login';
-  document.getElementById('adminName').textContent = data.admin.name;
-  adminData.admin = data.admin;
+  try {
+    const res = await fetch('/api/admin/me');
+    const data = await res.json();
+    if (!data.admin) {
+      window.location.replace('/admin-login?auth=required');
+      return;
+    }
+    // Auth confirmed — show the dashboard
+    document.getElementById('authOverlay').style.display = 'none';
+    document.getElementById('adminName').textContent = data.admin.name;
+    adminData.admin = data.admin;
+  } catch(e) {
+    window.location.replace('/admin-login?auth=required');
+    return;
+  }
 
   // Default dates
   const now = new Date();
@@ -248,7 +283,7 @@ async function init() {
 
 async function logout() {
   await fetch('/api/admin/logout', { method:'POST' });
-  window.location.href = '/';
+  window.location.replace('/');
 }
 
 function showTab(tab, btn) {

@@ -95,11 +95,23 @@ app.use(express.static(path.join(__dirname,'public'),{
   setHeaders:res=>{ res.setHeader('Cache-Control','no-store'); res.removeHeader('X-Powered-By'); }
 }));
 
-// Session
-const SESSION_SECRET = process.env.SESSION_SECRET || crypto.randomBytes(64).toString('hex');
+// Trust Railway reverse proxy (required for secure cookies over HTTPS)
+app.set('trust proxy', 1);
+
+// Session — set SESSION_SECRET in Railway env vars for stability across restarts
+const SESSION_SECRET = process.env.SESSION_SECRET || 'votesecure-dev-change-in-production';
+const isProd = process.env.NODE_ENV === 'production';
 app.use(session({
-  secret:SESSION_SECRET, resave:false, saveUninitialized:false, name:'__vs',
-  cookie:{ httpOnly:true, secure:process.env.NODE_ENV==='production', sameSite:'strict', maxAge:2*60*60*1000 }
+  secret: SESSION_SECRET,
+  resave: false,
+  saveUninitialized: false,
+  name: '__vs',
+  cookie: {
+    httpOnly: true,
+    secure: isProd,
+    sameSite: 'lax',
+    maxAge: 8 * 60 * 60 * 1000
+  }
 }));
 
 // Auth guards
