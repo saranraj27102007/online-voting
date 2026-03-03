@@ -235,54 +235,116 @@
 </div>
 
 <script>
+'use strict';
 let adminData = {};
 let chartInstances = {};
 
-// ── Session timeout: auto-logout after 2 hours of inactivity ──
+// ════════════════════════════════════════════════════════════════
+// REQUIREMENT 2 — AUTO LOGOUT ON TAB CLOSE
+// navigator.sendBeacon is the ONLY reliable way to fire a network
+// request when a tab/browser closes. fetch() gets cancelled.
+// The beacon calls /api/admin/logout to destroy the server session.
+// ════════════════════════════════════════════════════════════════
+window.addEventListener('pagehide', function(){
+  navigator.sendBeacon('/api/admin/logout', JSON.stringify({}));
+  // Also wipe the stored route from sessionStorage on exit
+  sessionStorage.removeItem('__vsAdminRoute');
+});
+
+// ════════════════════════════════════════════════════════════════
+// REQUIREMENT 3 — BLOCK BACK BUTTON CACHE
+// Replace the current history entry so pressing Back cannot return
+// to this page from the browser's cache.
+// Combined with server-side Cache-Control: no-store headers
+// set by requireAdmin(), this ensures the dashboard is never shown
+// from cache after logout.
+// ════════════════════════════════════════════════════════════════
+(function blockBackButton(){
+  // Push a dummy entry so Back goes to that entry (which redirects)
+  history.pushState(null, '', location.href);
+  window.addEventListener('popstate', function(){
+    // If Back is pressed while on dashboard, push forward again
+    // This traps the user on the page while authenticated,
+    // and once logged out the server will return 401 / redirect.
+    history.pushState(null, '', location.href);
+  });
+})();
+
+// ════════════════════════════════════════════════════════════════
+// REQUIREMENT 2 — IDLE TIMEOUT (2 HOURS)
+// Resets on any user activity. After 2 hours of inactivity,
+// session is destroyed on server and admin is redirected.
+// ════════════════════════════════════════════════════════════════
 var _idleTimer = null;
-var _IDLE_MS = 2 * 60 * 60 * 1000; // 2 hours
-function resetIdleTimer() {
+var _IDLE_MS   = 2 * 60 * 60 * 1000; // 2 hours
+
+function resetIdleTimer(){
   clearTimeout(_idleTimer);
-  _idleTimer = setTimeout(function() {
-    fetch('/api/admin/logout', { method: 'POST' }).finally(function() {
-      window.location.replace('/admin-login?session=expired');
+  _idleTimer = setTimeout(function(){
+    fetch('/api/admin/logout', { method:'POST' }).finally(function(){
+      sessionStorage.removeItem('__vsAdminRoute');
+      window.location.replace('/admin-login?reason=timeout');
     });
   }, _IDLE_MS);
 }
-['click','keydown','mousemove','touchstart','scroll'].forEach(function(e) {
-  document.addEventListener(e, resetIdleTimer, { passive: true });
+
+['click','keydown','mousemove','touchstart','scroll'].forEach(function(ev){
+  document.addEventListener(ev, resetIdleTimer, { passive:true });
 });
 resetIdleTimer();
 
-async function init() {
-  try {
-    const res = await fetch('/api/admin/me');
-    const data = await res.json();
-    if (!data.admin) {
+// ════════════════════════════════════════════════════════════════
+// REQUIREMENT 1 — SESSION GUARD ON PAGE LOAD
+// admin.html is served by requireAdmin() on the server which
+// already checks the session, but we add a client-side check too.
+// If server says session is gone (401 or data.admin === null),
+// redirect to login immediately. Handles the case where the server
+// session cookie expired mid-session.
+// ════════════════════════════════════════════════════════════════
+async function init(){
+  try{
+    const res  = await fetch('/api/admin/me');
+
+    // Handle 401 — requireAdmin already checked, but belt-and-suspenders
+    if(res.status === 401){
+      sessionStorage.removeItem('__vsAdminRoute');
       window.location.replace('/admin-login?auth=required');
       return;
     }
-    // Auth confirmed — show the dashboard
+
+    const data = await res.json();
+
+    if(!data.admin){
+      sessionStorage.removeItem('__vsAdminRoute');
+      window.location.replace('/admin-login?auth=required');
+      return;
+    }
+
+    // Session confirmed — reveal dashboard (was hidden by authOverlay)
     document.getElementById('authOverlay').style.display = 'none';
     document.getElementById('adminName').textContent = data.admin.name;
     adminData.admin = data.admin;
-  } catch(e) {
+
+  }catch(e){
+    sessionStorage.removeItem('__vsAdminRoute');
     window.location.replace('/admin-login?auth=required');
     return;
   }
 
-  // Default dates
-  const now = new Date();
+  // Default election dates
+  const now   = new Date();
   const later = new Date(now.getTime() + 7*24*60*60*1000);
   document.getElementById('elStart').value = now.toISOString().slice(0,16);
-  document.getElementById('elEnd').value = later.toISOString().slice(0,16);
+  document.getElementById('elEnd').value   = later.toISOString().slice(0,16);
   addCandidate(); addCandidate(); addCandidate(); addCandidate();
-
   loadOverview();
 }
 
-async function logout() {
+// ── Explicit logout button handler ───────────────────────────────
+async function logout(){
   await fetch('/api/admin/logout', { method:'POST' });
+  sessionStorage.removeItem('__vsAdminRoute');
+  // replace() removes dashboard from history — Back cannot return here
   window.location.replace('/');
 }
 

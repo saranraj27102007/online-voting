@@ -1542,7 +1542,7 @@ async function openFaceCam(){
   setTimeout(async function(){
     if(!faceStream) return;
     var v2=document.getElementById('faceVid');
-    if(getFaceLum(v2)<6){
+    if(getFaceLum(v2)<20){
       stopFaceCam();
       try{
         var bare=faceCameraId?{video:{deviceId:{exact:faceCameraId}}}:{video:true};
@@ -1612,13 +1612,18 @@ async function snapFace(){
   hideCountdown();
 
   var vid=document.getElementById('faceVid');
-  if(!vid||!vid.videoWidth){
+  if(!vid||!vid.videoWidth||vid.videoWidth<4){
     al('e4','err','Camera not ready. Wait a moment or click Retry Camera.');
+    startAutoCountdown();
     return;
   }
-  if(getFaceLum(vid)<6){
-    al('e4','err','Camera is black. Close other apps using the camera, then Retry Camera.');
+
+  // ── Lux check — raised threshold: 20 catches "dark but not pitch black" cameras
+  var lm=getFaceLum(vid);
+  if(lm<20){
+    al('e4','err','Camera is too dark or black. Click ☀️ Boost or Retry Camera.');
     document.getElementById('btnRetryFace').style.display='block';
+    startAutoCountdown();
     return;
   }
 
@@ -1631,20 +1636,38 @@ async function snapFace(){
   var cnv=document.createElement('canvas');
   cnv.width=vid.videoWidth; cnv.height=vid.videoHeight;
   var ctx=cnv.getContext('2d');
+
   // Mirror-correct for front camera on laptop
   var track=faceStream&&faceStream.getVideoTracks()[0];
   var settings=track?track.getSettings():{};
-  var isEnv=settings.facingMode==='environment'||(!isMobile&&facingMode!=='user');
-  if(!isMobile&&!isEnv){ ctx.save();ctx.translate(cnv.width,0);ctx.scale(-1,1); }
-  // Light boost
-  var bri=faceLux<80?2.0:faceLux<130?1.6:1.3;
+  var isEnv=settings.facingMode==='environment'||(!isMobile&&facingMode==='environment');
+  if(!isMobile&&!isEnv){
+    ctx.save();
+    ctx.translate(cnv.width,0);
+    ctx.scale(-1,1);
+  }
+  // Light boost applied to captured frame
+  var bri=faceLux<60?2.2:faceLux<100?1.8:faceLux<140?1.5:1.3;
   ctx.filter='brightness('+bri+') contrast(1.3)';
   ctx.drawImage(vid,0,0);
   if(!isMobile&&!isEnv) ctx.restore();
 
+  // ── Post-capture black screen check — catches cameras that look alive but output black
+  var canLm=getFaceLum(cnv);
+  if(canLm<18){
+    faceCapturing=false;
+    document.getElementById('btnFace').disabled=false;
+    document.getElementById('faceOval').className='oval';
+    document.getElementById('faceTxt').textContent='Position your face in the oval';
+    al('e4','err','Captured image is black. Close other apps using the camera, click ☀️ Boost, or Retry Camera.');
+    document.getElementById('btnRetryFace').style.display='block';
+    startAutoCountdown();
+    return;
+  }
+
   capturedCanvas=cnv;
 
-  // Show preview immediately
+  // Show preview on the result canvas
   var dispCnv=document.getElementById('faceCanvas');
   dispCnv.width=cnv.width; dispCnv.height=cnv.height;
   dispCnv.getContext('2d').drawImage(cnv,0,0);
@@ -1652,7 +1675,7 @@ async function snapFace(){
   stopFaceCam();
   clearInterval(luxLoop);
 
-  // Switch to "processing" panel, run AI on captured frame
+  // Switch to processing panel, run AI on captured frame
   showFacePanel('proc');
   setProc('Analysing face…', 20);
   await computeDescriptor(cnv);
@@ -1660,17 +1683,19 @@ async function snapFace(){
 
 // ── AI descriptor computation (runs after snap) ─────────────────
 async function computeDescriptor(cnv){
-  // If AI not loaded yet, wait for it (up to 12s more)
+  // Wait for AI — up to 30s with live countdown
   if(!aiReady||typeof faceapi==='undefined'){
-    setProc('Face AI loading…', 35);
-    for(var wi=0;wi<24;wi++){
-      if(aiReady&&typeof faceapi!=='undefined') break;
+    var waited=0;
+    while((!aiReady||typeof faceapi==='undefined')&&waited<30){
       await new Promise(function(r){setTimeout(r,500);});
+      waited+=0.5;
+      var pct=Math.min(60,Math.round(10+(waited/30)*50));
+      setProc('Loading face AI… ('+Math.round(waited)+'s)', pct);
     }
   }
 
+  // If AI never loaded — use pixel fingerprint so user is never blocked
   if(!aiReady||typeof faceapi==='undefined'){
-    // AI never loaded — use pixel fingerprint
     setProc('Processing photo…', 80);
     finalDesc=pixelFP(cnv);
     faceDescType='pixel';
@@ -1684,16 +1709,17 @@ async function computeDescriptor(cnv){
   }
 
   try{
-    setProc('Detecting face…', 50);
+    setProc('Detecting your face…', 65);
     var det=null;
     var opts=[
       window._tiny?new faceapi.TinyFaceDetectorOptions({inputSize:320,scoreThreshold:0.15}):new faceapi.SsdMobilenetv1Options({minConfidence:0.15}),
       window._tiny?new faceapi.TinyFaceDetectorOptions({inputSize:224,scoreThreshold:0.08}):new faceapi.SsdMobilenetv1Options({minConfidence:0.08}),
       window._tiny?new faceapi.TinyFaceDetectorOptions({inputSize:160,scoreThreshold:0.04}):new faceapi.SsdMobilenetv1Options({minConfidence:0.04}),
+      window._tiny?new faceapi.TinyFaceDetectorOptions({inputSize:128,scoreThreshold:0.02}):new faceapi.SsdMobilenetv1Options({minConfidence:0.02}),
     ];
     for(var qi=0;qi<opts.length&&!det;qi++){
       try{
-        var tmo=new Promise(function(_,rej){setTimeout(function(){rej(new Error('t'));},3000);});
+        var tmo=new Promise(function(_,rej){setTimeout(function(){rej(new Error('t'));},4000);});
         det=await Promise.race([
           faceapi.detectSingleFace(cnv,opts[qi]).withFaceLandmarks().withFaceDescriptor(),
           tmo
@@ -1701,32 +1727,37 @@ async function computeDescriptor(cnv){
       }catch(e){}
     }
 
-    setProc('Processing face data…', 80);
+    setProc('Finalising face data…', 88);
 
     if(det&&det.descriptor&&!isBlackDescriptor(det.descriptor)){
+      // ✅ AI detected a real face
       finalDesc=det.descriptor;
       faceDescType='ai';
-      setProc('✅ Face verified!', 100);
-      setBadge('🤖 Face AI Verified', '🎯 Face verified by AI — duplicate check active. Click Complete Registration.');
+      setProc('✅ Face verified by AI!', 100);
+      await new Promise(function(r){setTimeout(r,300);});
+      setBadge('🤖 Face AI Verified','🤖 Face verified — strong duplicate protection active.');
+      showFacePanel('prev');
+      faceCapturing=false;
     } else {
-      // No AI face found — use pixel FP silently
+      // AI loaded but couldn't detect a face — use pixel fingerprint
+      // (common on low-res laptop cameras, unusual angles, or side lighting)
       finalDesc=pixelFP(cnv);
       faceDescType='pixel';
       setProc('✅ Photo saved!', 100);
-      setBadge('📸 Photo Captured', '📸 Photo saved — click Complete Registration to finish.');
+      await new Promise(function(r){setTimeout(r,300);});
+      setBadge('📸 Photo Captured','📸 Face not detected by AI — photo saved. You can retake or proceed.');
+      showFacePanel('prev');
+      faceCapturing=false;
     }
-
-    await new Promise(function(r){setTimeout(r,300);});
-    showFacePanel('prev');
-    faceCapturing=false;
 
   }catch(err){
     console.error('Descriptor error:', err);
+    // Error during AI — always fall back to pixel so user is never stuck
     finalDesc=pixelFP(cnv);
     faceDescType='pixel';
     setProc('✅ Photo saved!', 100);
     await new Promise(function(r){setTimeout(r,300);});
-    setBadge('📸 Photo Captured','📸 Photo saved — click Complete Registration to finish.');
+    setBadge('📸 Photo Captured','📸 Photo saved — you can retake or click Complete Registration.');
     showFacePanel('prev');
     faceCapturing=false;
   }

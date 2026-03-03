@@ -1,0 +1,66 @@
+[
+  {
+    "id": "61ce1e61-8435-4d58-b64c-18a228cdb21d",
+    "ts": "2026-03-03T14:52:28.360Z",
+    "event": "ADMIN_LOGOUT",
+    "detail": "Admin: admin",
+    "ip": "::1",
+    "ua": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36 Edg/145."
+  },
+  {
+    "id": "13f07690-1400-43b5-a015-07c201c3db27",
+    "ts": "2026-03-03T14:52:00.860Z",
+    "event": "ADMIN_LOGIN_SUCCESS",
+    "detail": "Admin: admin",
+    "ip": "::1",
+    "ua": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36 Edg/145."
+  },
+  {
+    "id": "e81fb02f-ec0c-4dfd-9d79-e9a7c71f687c",
+    "ts": "2026-03-01T08:39:51.343Z",
+    "event": "ADMIN_LOGOUT",
+    "detail": "Admin: admin",
+    "ip": "::1",
+    "ua": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36 Edg/145."
+  },
+  {
+    "id": "d8709a03-a91a-4438-8465-f6ccc1507564",
+    "ts": "2026-03-01T08:39:44.214Z",
+    "event": "VOTER_DELETED",
+    "detail": "ID: 8f64b423-f11c-4eee-9bd1-72bf474f5559",
+    "ip": "::1",
+    "ua": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36 Edg/145."
+  },
+  {
+    "id": "b84d6cdd-557f-44e8-aff2-7a31d0bacea6",
+    "ts": "2026-03-01T08:39:35.930Z",
+    "event": "ADMIN_LOGIN_SUCCESS",
+    "detail": "Admin: admin",
+    "ip": "::1",
+    "ua": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36 Edg/145."
+  },
+  {
+    "id": "7e4162fd-1fc4-4120-be8f-94dd7f80a582",
+    "ts": "2026-03-01T08:36:26.129Z",
+    "event": "ADMIN_LOGOUT",
+    "detail": "Admin: admin",
+    "ip": "::1",
+    "ua": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36 Edg/145."
+  },
+  {
+    "id": "c065e33a-4110-4345-9538-21f6277c72d7",
+    "ts": "2026-03-01T08:36:13.704Z",
+    "event": "VOTER_DELETED",
+    "detail": "ID: 648fcdc8-468a-4ddf-a018-42c3a8ca315b",
+    "ip": "::1",
+    "ua": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36 Edg/145."
+  },
+  {
+    "id": "7f186b4f-8fa9-46ea-bacf-941072b2b002",
+    "ts": "2026-03-01T08:36:04.494Z",
+    "event": "ADMIN_LOGIN_SUCCESS",
+    "detail": "Admin: admin",
+    "ip": "::1",
+    "ua": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36 Edg/145."
+  }
+]
