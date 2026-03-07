@@ -1,63 +1,240 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>VoteSecure — Online Voting System</title>
-  <link rel="stylesheet" href="/css/style.css"/>
-  <style>
-    .features { display: flex; gap: 24px; margin-top: 40px; flex-wrap: wrap; justify-content: center; }
-    .feature { display: flex; align-items: center; gap: 8px; color: rgba(255,255,255,.8); font-size: 14px; font-weight: 500; }
-    .feature .dot { width: 8px; height: 8px; background: #818cf8; border-radius: 50%; }
-  </style>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>VoteSecure — Secure Online Voting</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet"/>
+<style>
+:root{
+  --bg0:#020B18;--bg1:#051322;--bg2:#081C30;
+  --cyan:#00C8FF;--cyan-d:#0891B2;--cyan-l:#67E8F9;
+  --text:#E8F4FF;--text2:#7BAAC8;--text3:#3D6882;
+  --border:rgba(0,200,255,0.18);--border2:rgba(0,180,255,0.10);
+}
+*,*::before,*::after{margin:0;padding:0;box-sizing:border-box;}
+html{scroll-behavior:smooth;}
+body{
+  font-family:'Inter',system-ui,sans-serif;
+  background:var(--bg0);color:var(--text);
+  min-height:100vh;overflow-x:hidden;
+  -webkit-font-smoothing:antialiased;
+}
+/* Circuit grid */
+body::before{
+  content:'';position:fixed;inset:0;z-index:0;pointer-events:none;
+  background:
+    linear-gradient(rgba(0,200,255,0.025) 1px,transparent 1px),
+    linear-gradient(90deg,rgba(0,200,255,0.025) 1px,transparent 1px);
+  background-size:44px 44px;
+}
+/* Nebula overlays */
+body::after{
+  content:'';position:fixed;inset:0;z-index:0;pointer-events:none;
+  background:
+    radial-gradient(ellipse 70% 55% at 10% 15%,rgba(0,120,220,0.09) 0%,transparent 70%),
+    radial-gradient(ellipse 50% 45% at 90% 80%,rgba(0,200,255,0.06) 0%,transparent 70%),
+    radial-gradient(ellipse 40% 35% at 50% 55%,rgba(0,70,170,0.05) 0%,transparent 70%);
+}
+
+/* ── Floating circuit dots ── */
+.dots{position:fixed;inset:0;z-index:0;pointer-events:none;overflow:hidden;}
+.dot{position:absolute;border-radius:50%;background:rgba(0,200,255,0.35);animation:float 8s ease-in-out infinite;}
+.dot:nth-child(1){width:3px;height:3px;top:15%;left:8%;animation-delay:0s;animation-duration:9s;}
+.dot:nth-child(2){width:2px;height:2px;top:35%;left:92%;animation-delay:1.5s;animation-duration:7s;}
+.dot:nth-child(3){width:4px;height:4px;top:65%;left:5%;animation-delay:3s;animation-duration:11s;}
+.dot:nth-child(4){width:2px;height:2px;top:80%;left:75%;animation-delay:0.8s;animation-duration:8s;}
+.dot:nth-child(5){width:3px;height:3px;top:25%;left:55%;animation-delay:2s;animation-duration:10s;}
+.dot:nth-child(6){width:2px;height:2px;top:70%;left:40%;animation-delay:4s;animation-duration:9s;}
+@keyframes float{0%,100%{transform:translateY(0) scale(1);opacity:0.35;}50%{transform:translateY(-14px) scale(1.2);opacity:0.7;}}
+
+/* ── NAV ── */
+nav{
+  position:fixed;top:0;left:0;right:0;z-index:100;
+  display:flex;align-items:center;justify-content:space-between;
+  padding:0.9rem 1.75rem;
+  background:rgba(2,11,24,0.88);backdrop-filter:blur(14px);
+  border-bottom:1px solid rgba(0,200,255,0.1);
+}
+.nav-brand{display:flex;align-items:center;gap:0.55rem;text-decoration:none;}
+.nav-icon{
+  width:34px;height:34px;border-radius:9px;
+  background:linear-gradient(135deg,rgba(0,200,255,0.18),rgba(0,100,200,0.28));
+  border:1.5px solid rgba(0,200,255,0.35);
+  display:flex;align-items:center;justify-content:center;font-size:1rem;
+  box-shadow:0 0 12px rgba(0,200,255,0.2);
+}
+.nav-txt{font-size:1.1rem;font-weight:800;color:var(--text);}
+.nav-txt span{color:var(--cyan-l);}
+.nav-admin{
+  padding:0.4rem 1rem;border-radius:7px;
+  background:rgba(0,200,255,0.06);
+  color:var(--text2);font-size:0.8rem;font-weight:600;
+  text-decoration:none;border:1px solid rgba(0,200,255,0.15);
+  transition:all 0.18s;
+}
+.nav-admin:hover{background:rgba(0,200,255,0.12);color:var(--cyan-l);border-color:rgba(0,200,255,0.3);}
+
+/* ── HERO ── */
+.hero{
+  position:relative;z-index:1;
+  min-height:100vh;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  text-align:center;padding:6rem 1.5rem 3rem;
+}
+
+/* Shield SVG badge */
+.hero-shield{
+  width:72px;height:72px;margin:0 auto 1.5rem;
+  position:relative;animation:up 0.5s ease both;
+}
+.hero-shield svg{width:100%;height:100%;filter:drop-shadow(0 0 12px rgba(0,200,255,0.5));}
+
+.pill{
+  display:inline-flex;align-items:center;gap:0.45rem;
+  padding:0.3rem 0.9rem;
+  background:rgba(0,200,255,0.07);border:1px solid rgba(0,200,255,0.2);
+  border-radius:100px;font-size:0.73rem;font-weight:600;
+  color:var(--cyan-l);letter-spacing:1px;text-transform:uppercase;
+  margin-bottom:1.5rem;animation:up 0.5s ease 0.05s both;
+}
+.dot-blink{width:5px;height:5px;background:var(--cyan-l);border-radius:50%;animation:blink 2s ease infinite;box-shadow:0 0 5px rgba(0,200,255,0.8);}
+@keyframes blink{0%,100%{opacity:1;}50%{opacity:0.2;}}
+
+h1{
+  font-size:clamp(2.8rem,8vw,5.8rem);font-weight:800;
+  line-height:0.97;letter-spacing:-2px;
+  animation:up 0.5s ease 0.1s both;
+}
+h1 span{display:block;}
+h1 em{font-style:normal;color:var(--cyan-l);text-shadow:0 0 24px rgba(0,200,255,0.35);}
+
+.hero-p{
+  max-width:440px;margin:1.5rem auto 2.4rem;
+  font-size:0.97rem;color:var(--text2);line-height:1.75;
+  animation:up 0.5s ease 0.15s both;
+}
+
+.ctas{
+  display:flex;gap:0.8rem;flex-wrap:wrap;justify-content:center;
+  animation:up 0.5s ease 0.2s both;
+}
+.cta{
+  padding:0.8rem 1.85rem;border-radius:9px;
+  font-family:'Inter',sans-serif;font-weight:700;font-size:0.9rem;
+  cursor:pointer;text-decoration:none;transition:all 0.18s;
+  border:none;display:inline-flex;align-items:center;gap:0.45rem;
+}
+.cta-a{
+  background:linear-gradient(135deg,#0098C8,#00C8FF);color:#000;
+  box-shadow:0 4px 20px rgba(0,200,255,0.28);
+}
+.cta-a:hover{background:linear-gradient(135deg,#00B0E0,#22DDFF);transform:translateY(-2px);box-shadow:0 8px 28px rgba(0,200,255,0.4);}
+.cta-b{background:rgba(0,180,255,0.07);color:var(--text);border:1.5px solid rgba(0,200,255,0.18);}
+.cta-b:hover{background:rgba(0,200,255,0.13);border-color:rgba(0,200,255,0.35);}
+
+/* ── Security badges ── */
+.badges{
+  position:relative;z-index:1;
+  display:flex;flex-wrap:wrap;justify-content:center;gap:0.55rem;
+  padding:0 1.5rem 4.5rem;max-width:700px;margin:0 auto;
+  animation:up 0.5s ease 0.25s both;
+}
+.badge{
+  display:flex;align-items:center;gap:0.4rem;
+  padding:0.44rem 0.95rem;border-radius:100px;
+  background:rgba(0,200,255,0.05);border:1px solid rgba(0,200,255,0.14);
+  font-size:0.78rem;color:var(--text2);font-weight:500;
+  transition:all 0.18s;
+}
+.badge:hover{background:rgba(0,200,255,0.09);border-color:rgba(0,200,255,0.25);color:var(--cyan-l);}
+
+/* ── Footer ── */
+footer{
+  position:relative;z-index:1;
+  border-top:1px solid rgba(0,200,255,0.08);
+  padding:1.25rem 1.75rem;
+  display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:0.75rem;
+  color:var(--text3);font-size:0.78rem;
+}
+footer a{color:var(--text3);text-decoration:none;transition:color 0.18s;}
+footer a:hover{color:var(--cyan-l);}
+
+@keyframes up{from{opacity:0;transform:translateY(18px);}to{opacity:1;transform:translateY(0);}}
+@media(max-width:600px){
+  nav{padding:0.8rem 1rem;}
+  .cta{padding:0.7rem 1.4rem;font-size:0.85rem;}
+  footer{justify-content:center;text-align:center;}
+}
+</style>
 </head>
 <body>
-<div class="landing">
-  <div class="landing-logo">🗳️</div>
-  <h1 class="landing-title">VoteSecure</h1>
-  <p class="landing-sub">Secure · Transparent · Face-Verified Online Voting Platform</p>
 
-  <div class="landing-cards">
-    <!-- Voter -->
-    <a href="/voter-login" class="landing-card">
-      <span class="icon">🧑‍💼</span>
-      <h2>I'm a Voter</h2>
-      <p>Login with your Voter ID and verify your identity with face recognition to cast your vote.</p>
-      <span class="btn-card">Voter Login →</span>
-    </a>
-
-    <!-- Admin -->
-    <a href="/admin-login" class="landing-card">
-      <span class="icon">⚙️</span>
-      <h2>Admin Panel</h2>
-      <p>Manage elections, view live vote counts, monitor results and manage registered voters.</p>
-      <span class="btn-card">Admin Login →</span>
-    </a>
-  </div>
-
-  <div class="features">
-    <span class="feature"><span class="dot"></span> Voter ID Authentication</span>
-    <span class="feature"><span class="dot"></span> Face Recognition Verification</span>
-    <span class="feature"><span class="dot"></span> One Vote Per Person</span>
-    <span class="feature"><span class="dot"></span> Live Results Dashboard</span>
-  </div>
-
-  <div style="margin-top: 40px; text-align:center;">
-    <a href="/register" style="color: rgba(255,255,255,.7); font-size:14px; text-decoration:underline;">
-      New voter? Register here →
-    </a>
-  </div>
+<div class="dots">
+  <div class="dot"></div><div class="dot"></div><div class="dot"></div>
+  <div class="dot"></div><div class="dot"></div><div class="dot"></div>
 </div>
 
-<script>
-  // If already logged in, redirect
-  Promise.all([fetch('/api/voter/me'), fetch('/api/admin/me')])
-    .then(async ([vr, ar]) => {
-      const vd = await vr.json();
-      const ad = await ar.json();
-      if (vd.voter) window.location.href = '/vote';
-      if (ad.admin) window.location.href = '/admin';
-    });
-</script>
+<nav>
+  <a href="/" class="nav-brand">
+    <div class="nav-icon">
+      <svg width="18" height="20" viewBox="0 0 18 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <path d="M9 0L0 3.5V9.5C0 14.7 3.93 19.58 9 21C14.07 19.58 18 14.7 18 9.5V3.5L9 0Z" fill="rgba(0,200,255,0.3)" stroke="#00C8FF" stroke-width="0.8"/>
+        <path d="M5.5 10L7.8 12.3L12.5 7.5" stroke="#00C8FF" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+    </div>
+    <span class="nav-txt">Vote<span>Secure</span></span>
+  </a>
+  <a href="/admin" class="nav-admin">⚙ Admin Panel</a>
+</nav>
+
+<section class="hero">
+  <!-- Animated shield logo -->
+  <div class="hero-shield">
+    <svg viewBox="0 0 80 90" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <linearGradient id="sg" x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0%" stop-color="#0891B2"/>
+          <stop offset="100%" stop-color="#00C8FF"/>
+        </linearGradient>
+        <filter id="glow"><feGaussianBlur stdDeviation="2.5" result="blur"/><feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+      </defs>
+      <path d="M40 2L4 16V40C4 61 19.8 80.4 40 86C60.2 80.4 76 61 76 40V16L40 2Z" fill="rgba(0,100,180,0.2)" stroke="url(#sg)" stroke-width="2" filter="url(#glow)"/>
+      <path d="M26 43L34 51L54 32" stroke="#00C8FF" stroke-width="4.5" stroke-linecap="round" stroke-linejoin="round" filter="url(#glow)"/>
+    </svg>
+  </div>
+
+  <div class="pill"><span class="dot-blink"></span>Secure · Verified · Transparent</div>
+
+  <h1>
+    <span>Digital</span>
+    <span><em>Voting</em></span>
+    <span>Platform</span>
+  </h1>
+
+  <p class="hero-p">Biometric-verified elections. Register once, vote securely. Face scan + ID verification built in.</p>
+
+  <div class="ctas">
+    <a href="/register" class="cta cta-a">📝 Register to Vote</a>
+    <a href="/vote"     class="cta cta-b">🗳️ Cast My Vote</a>
+  </div>
+</section>
+
+<div class="badges">
+  <div class="badge">🔒 Phone OTP</div>
+  <div class="badge">🪪 ID Document OCR</div>
+  <div class="badge">👤 Face Verification</div>
+  <div class="badge">🛡️ Duplicate Detection</div>
+  <div class="badge">✅ One Vote Per Person</div>
+  <div class="badge">📊 Live Results</div>
+</div>
+
+<footer>
+  <span style="display:flex;align-items:center;gap:0.4rem">
+    <svg width="14" height="16" viewBox="0 0 18 20" fill="none"><path d="M9 0L0 3.5V9.5C0 14.7 3.93 19.58 9 21C14.07 19.58 18 14.7 18 9.5V3.5L9 0Z" stroke="rgba(0,200,255,0.5)" stroke-width="1"/><path d="M5.5 10L7.8 12.3L12.5 7.5" stroke="rgba(0,200,255,0.5)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    VoteSecure
+  </span>
+  <a href="/admin">Admin Panel →</a>
+</footer>
 </body>
 </html>

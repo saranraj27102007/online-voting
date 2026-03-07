@@ -1,0 +1,465 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>Cast Your Vote — VoteSecure</title>
+<link rel="stylesheet" href="/assets/style.css"/>
+<style>
+.vid-input-wrap { position:relative; }
+.vid-input-icon { position:absolute; left:0.85rem; top:50%; transform:translateY(-50%); font-size:1rem; pointer-events:none; }
+#f-vid { padding-left:2.4rem; font-family:'Space Mono',monospace; letter-spacing:2px; text-transform:uppercase; }
+.face-mini {
+  position:relative; width:100%; aspect-ratio:4/3; background:#000;
+  border-radius:12px; overflow:hidden;
+  border:1.5px solid rgba(0,200,255,0.22);
+  margin-bottom:0.6rem;
+  box-shadow:0 0 20px rgba(0,200,255,0.08);
+}
+.face-mini video { width:100%; height:100%; object-fit:cover; transform:scaleX(-1); }
+.mini-oval {
+  position:absolute; top:50%; left:50%; transform:translate(-50%,-52%);
+  width:110px; height:140px; border:2px solid #00C8FF; border-radius:50%;
+  pointer-events:none;
+  box-shadow:0 0 0 9999px rgba(0,0,0,0.35), 0 0 16px rgba(0,200,255,0.4), inset 0 0 10px rgba(0,200,255,0.1);
+  animation:scan-pulse 2s ease-in-out infinite;
+}
+@keyframes scan-pulse {
+  0%,100%{box-shadow:0 0 0 9999px rgba(0,0,0,0.35),0 0 12px rgba(0,200,255,0.3),inset 0 0 8px rgba(0,200,255,0.08);}
+  50%    {box-shadow:0 0 0 9999px rgba(0,0,0,0.35),0 0 24px rgba(0,200,255,0.6),inset 0 0 16px rgba(0,200,255,0.15);}
+}
+.face-mini-bar { text-align:center; font-size:0.8rem; color:var(--text3); margin-bottom:0.75rem; }
+.voter-welcome { display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:1.4rem; }
+.voter-welcome h2 { font-size:1.1rem; font-weight:700; }
+.voter-welcome p  { color:var(--text2); font-size:0.82rem; margin-top:0.15rem; }
+</style>
+</head>
+<body>
+<div class="page-wrap">
+
+  <a href="/" class="back-lnk">← Home</a>
+
+  <div class="page-header">
+    <a href="/" class="logo-link">
+      <div class="logo-mark">🗳️</div>
+      <span class="logo-name">Vote<span>Secure</span></span>
+    </a>
+    <h1 class="page-title">Cast Your Vote</h1>
+    <p class="page-sub">Authenticate with your Voter ID and face scan</p>
+  </div>
+
+  <div id="alertbox"></div>
+
+  <!-- ══ PANEL: Auth ══════════════════════════════════════════════════════════ -->
+  <div id="p-auth" class="panel show">
+    <div class="card">
+      <div class="card-title">Voter Authentication</div>
+      <div class="card-sub">Enter your Voter ID, then complete face scan</div>
+
+      <div class="fg">
+        <label class="fl">Voter ID</label>
+        <div class="vid-input-wrap">
+          <span class="vid-input-icon">🪪</span>
+          <input id="f-vid" type="text" class="fi" placeholder="e.g. VS241A2B3C4D" maxlength="14"/>
+        </div>
+      </div>
+
+      <div id="face-load-msg" class="alert al-info" style="margin-bottom:0.75rem">
+        <span class="spin"></span>&nbsp;Loading face detection models…
+      </div>
+
+      <div id="face-section" style="display:none">
+        <label class="fl">Face Scan</label>
+        <div class="face-mini">
+          <video id="auth-vid" autoplay playsinline muted></video>
+          <div class="mini-oval"></div>
+        </div>
+        <div class="face-mini-bar" id="auth-face-bar">Look at the camera…</div>
+      </div>
+
+      <button class="btn btn-p" id="btn-auth" disabled>Verify Identity →</button>
+    </div>
+  </div>
+
+  <!-- ══ PANEL: Elections ═════════════════════════════════════════════════════ -->
+  <div id="p-elec" class="panel">
+    <div class="card">
+      <div class="voter-welcome">
+        <div>
+          <h2>Active Elections</h2>
+          <p>Welcome, <span id="voter-name" style="color:var(--green-l);font-weight:600"></span></p>
+        </div>
+        <button class="btn btn-g btn-sm" onclick="signOut()">Sign Out</button>
+      </div>
+
+      <div id="elec-loading" class="alert al-info"><span class="spin"></span>&nbsp;Loading elections…</div>
+      <div id="elec-list"></div>
+      <div id="elec-empty" style="display:none;text-align:center;padding:2rem 0;color:var(--text3)">
+        <div style="font-size:2.5rem;margin-bottom:0.5rem">🗳️</div>
+        <p style="font-weight:600;color:var(--text2)">No active elections right now</p>
+        <p style="font-size:0.82rem;margin-top:0.25rem">Check back later</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══ PANEL: Voting Booth ══════════════════════════════════════════════════ -->
+  <div id="p-vote" class="panel">
+    <div class="card">
+      <div style="display:flex;align-items:center;gap:0.75rem;margin-bottom:1.4rem">
+        <button class="btn btn-g btn-sm" onclick="showPanel('p-elec')">← Back</button>
+        <div>
+          <div style="font-weight:700;font-size:1rem" id="vote-title"></div>
+          <div style="color:var(--text3);font-size:0.78rem;margin-top:0.1rem" id="vote-desc"></div>
+        </div>
+      </div>
+
+      <label class="fl" style="margin-bottom:0.75rem">Select a candidate</label>
+      <div id="cand-list"></div>
+
+      <div id="age-warn" class="alert al-warn" style="display:none;margin-top:0.75rem">
+        <span>⚠️</span><span id="age-warn-txt"></span>
+      </div>
+
+      <button class="btn btn-p" id="btn-cast" disabled style="margin-top:1rem">🗳️ Cast My Vote</button>
+    </div>
+  </div>
+
+  <!-- ══ PANEL: Success ═══════════════════════════════════════════════════════ -->
+  <div id="p-done" class="panel">
+    <div class="card" style="text-align:center">
+      <div style="font-size:3rem;margin-bottom:0.75rem">🎉</div>
+      <div class="card-title" style="color:var(--green-l);font-size:1.3rem">Vote Cast!</div>
+      <p id="done-msg" style="color:var(--text2);font-size:0.85rem;margin:0.4rem 0 1.25rem"></p>
+      <div class="alert al-ok" style="text-align:left;margin-bottom:1.25rem">
+        <span>🔒</span><span>Your vote is recorded anonymously. No one can see who you voted for.</span>
+      </div>
+      <a href="/" class="btn btn-p">← Back to Home</a>
+    </div>
+  </div>
+
+</div><!-- /page-wrap -->
+
+<script src="https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/dist/face-api.min.js"></script>
+<script>
+var WEIGHTS = 'https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/weights';
+
+/* ── State ── */
+var faceMdReady    = false;
+var authStream     = null;
+var faceVisible    = false;  /* true when a face is currently in frame */
+var authLooping    = false;
+var selElection    = null;
+var selCandId      = null;
+var votedList      = [];
+var _faceWarnShown = false;
+
+/* ── Helpers ── */
+function setAlert(msg, t) {
+  var ic = {ok:'✅', err:'❌', warn:'⚠️', info:'ℹ️'};
+  var tp = t || 'err';
+  document.getElementById('alertbox').innerHTML =
+    '<div class="alert al-' + tp + '"><span>' + ic[tp] + '</span><span>' + msg + '</span></div>';
+  if (tp !== 'err') setTimeout(function(){ document.getElementById('alertbox').innerHTML=''; }, 5000);
+}
+
+function showPanel(id) {
+  ['p-auth','p-elec','p-vote','p-done'].forEach(function(p) {
+    var el = document.getElementById(p);
+    if (el) el.className = 'panel' + (p === id ? ' show' : '');
+  });
+  document.getElementById('alertbox').innerHTML = '';
+}
+
+/* ── Canvas preprocessing — boosts brightness/contrast for low-light cams ── */
+function preprocessFrame(videoEl) {
+  var w = videoEl.videoWidth  || 320;
+  var h = videoEl.videoHeight || 240;
+  if (!w || !h) return videoEl;
+  var c   = document.createElement('canvas');
+  c.width = w; c.height = h;
+  var ctx = c.getContext('2d');
+  ctx.filter = 'brightness(1.4) contrast(1.2)';
+  ctx.drawImage(videoEl, 0, 0);
+  ctx.filter = 'none';
+  return c;
+}
+
+/* ── Boot ── */
+window.addEventListener('DOMContentLoaded', function() {
+  var msg = document.getElementById('face-load-msg');
+  var sec = document.getElementById('face-section');
+  var btn = document.getElementById('btn-auth');
+
+  faceapi.nets.tinyFaceDetector.loadFromUri(WEIGHTS)
+  .then(function(){ return faceapi.nets.faceLandmark68Net.loadFromUri(WEIGHTS); })
+  .then(function(){ return faceapi.nets.faceRecognitionNet.loadFromUri(WEIGHTS); })
+  .then(function() {
+    faceMdReady = true;
+    msg.style.display = 'none';
+    sec.style.display = 'block';
+    btn.disabled = false;
+    startAuthCam();
+  })
+  .catch(function() {
+    msg.className = 'alert al-warn';
+    msg.innerHTML = '<span>\u26a0\ufe0f</span><span>Face models unavailable \u2014 Voter ID only mode.</span>';
+    sec.style.display = 'block';
+    btn.disabled = false;
+    startAuthCam();
+  });
+});
+
+/* ── Camera ── */
+function startAuthCam() {
+  document.getElementById('face-section').style.display = 'block';
+  navigator.mediaDevices.getUserMedia({
+    video: { width:{ideal:320}, height:{ideal:240}, facingMode:'user' }
+  })
+  .then(function(stream) {
+    authStream = stream;
+    var v = document.getElementById('auth-vid');
+    v.srcObject = stream;
+    v.onloadedmetadata = function() {
+      v.play();
+      if (faceMdReady) runFacePresenceLoop(v);
+    };
+  })
+  .catch(function() {
+    var bar = document.getElementById('auth-face-bar');
+    if (bar) bar.textContent = '\ud83d\udcf5 Camera unavailable \u2014 Voter ID only.';
+  });
+}
+
+function stopAuthCam() {
+  authLooping = false;
+  faceVisible = false;
+  if (authStream) { authStream.getTracks().forEach(function(t){t.stop();}); authStream = null; }
+}
+
+/* ── Lightweight presence loop ─────────────────────────────────────────────
+   Checks ONLY if a face is visible (no descriptor) every 300ms.
+   This is ~4x faster than computing a descriptor each frame.
+   The actual descriptor is captured ONCE when the user clicks Verify.
+────────────────────────────────────────────────────────────────────────── */
+function runFacePresenceLoop(v) {
+  authLooping = true;
+  /* inputSize 224 + threshold 0.22 = fast AND works in dim/poor-quality cameras */
+  var opts = new faceapi.TinyFaceDetectorOptions({ inputSize: 224, scoreThreshold: 0.22 });
+  var bar  = document.getElementById('auth-face-bar');
+  (function loop() {
+    if (!authLooping || !authStream) { authLooping = false; return; }
+    var frame = preprocessFrame(v);
+    faceapi.detectSingleFace(frame, opts)
+    .then(function(det) {
+      faceVisible = !!det;
+      if (bar) {
+        bar.style.color = det ? 'var(--green-l)' : '';
+        bar.textContent = det ? '\u2705 Face detected \u2014 click Verify' : '\ud83d\udc64 Look at the camera\u2026';
+      }
+    })
+    .catch(function(){})
+    .finally(function(){ if (authLooping) setTimeout(loop, 300); });
+  })();
+}
+
+/* ── Auth button ── */
+document.getElementById('btn-auth').addEventListener('click', function() {
+  var vid = document.getElementById('f-vid').value.trim().toUpperCase();
+  if (!vid) { setAlert('Please enter your Voter ID.'); return; }
+
+  /* Warn once if face models are running but no face visible */
+  if (faceMdReady && authStream && !faceVisible && !_faceWarnShown) {
+    _faceWarnShown = true;
+    setAlert('Face not visible yet \u2014 look directly at camera, then click Verify again.', 'warn');
+    return;
+  }
+  _faceWarnShown = false;
+
+  var btn = document.getElementById('btn-auth');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spin"></span> Capturing face\u2026';
+
+  /* ── One-shot descriptor on click ──────────────────────────────────────
+     The presence loop confirmed a face is there. Now run withFaceDescriptor
+     ONCE for authentication. Much faster than computing it every 300ms.
+  ────────────────────────────────────────────────────────────────────── */
+  function authenticate(desc) {
+    btn.innerHTML = '<span class="spin"></span> Verifying\u2026';
+    fetch('/api/voting/authenticate', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ voterId:vid, faceDescriptor:desc })
+    })
+    .then(function(r){ return r.json().then(function(d){ return {ok:r.ok,d:d}; }); })
+    .then(function(res) {
+      btn.disabled = false; btn.textContent = 'Verify Identity \u2192';
+      if (!res.ok) { setAlert(res.d.error || 'Authentication failed.'); return; }
+      stopAuthCam();
+      document.getElementById('voter-name').textContent = res.d.voter.fullName;
+      votedList = res.d.voter.votedElections || [];
+      showPanel('p-elec');
+      loadElections();
+    })
+    .catch(function() {
+      btn.disabled = false; btn.textContent = 'Verify Identity \u2192';
+      setAlert('Network error. Try again.');
+    });
+  }
+
+  var v = document.getElementById('auth-vid');
+  if (faceMdReady && v && v.readyState >= 2 && authStream) {
+    var opts = new faceapi.TinyFaceDetectorOptions({ inputSize: 320, scoreThreshold: 0.20 });
+    var frame = preprocessFrame(v);
+    faceapi.detectSingleFace(frame, opts)
+      .withFaceLandmarks()
+      .withFaceDescriptor()
+    .then(function(det) {
+      authenticate(det ? Array.from(det.descriptor) : new Array(128).fill(0));
+    })
+    .catch(function() { authenticate(new Array(128).fill(0)); });
+  } else {
+    authenticate(new Array(128).fill(0));
+  }
+});
+
+/* ── Elections ── */
+function loadElections() {
+  var loading = document.getElementById('elec-loading');
+  var list    = document.getElementById('elec-list');
+  var empty   = document.getElementById('elec-empty');
+  loading.style.display = 'flex'; list.innerHTML = ''; empty.style.display = 'none';
+
+  fetch('/api/voting/elections')
+  .then(function(r){ return r.json(); })
+  .then(function(data) {
+    loading.style.display = 'none';
+    var elections = data.elections || [];
+    if (!elections.length) { empty.style.display = 'block'; return; }
+
+    elections.forEach(function(e) {
+      var voted   = votedList.indexOf(e.id) !== -1;
+      var endDate = new Date(e.endDate).toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'numeric'});
+      var ageTxt  = e.minAge ? e.minAge + (e.maxAge ? '\u2013'+e.maxAge : '+') + ' yrs' : '';
+
+      var div = document.createElement('div');
+      div.className = 'elec-card' + (voted ? ' voted' : '');
+      div.innerHTML =
+        '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:0.75rem">' +
+          '<div>' +
+            '<div class="elec-title">' + esc(e.title) + '</div>' +
+            (e.description ? '<div class="elec-meta">' + esc(e.description) + '</div>' : '') +
+            '<div class="elec-meta" style="margin-top:0.2rem">Ends ' + endDate +
+              ' &bull; ' + e.candidates.length + ' candidates' +
+              (ageTxt ? ' &bull; Age: ' + ageTxt : '') +
+            '</div>' +
+          '</div>' +
+          '<span class="tag ' + (voted ? 'tag-ok' : 'tag-info') + '">' + (voted ? '\u2705 Voted' : 'Vote \u2192') + '</span>' +
+        '</div>';
+
+      if (!voted) {
+        (function(election){ div.addEventListener('click', function(){ openBooth(election); }); })(e);
+      }
+      list.appendChild(div);
+    });
+  })
+  .catch(function() {
+    loading.style.display = 'none';
+    setAlert('Could not load elections.', 'err');
+  });
+}
+
+/* ── Booth ── */
+function openBooth(e) {
+  selElection = e; selCandId = null;
+  document.getElementById('vote-title').textContent = e.title;
+  document.getElementById('vote-desc').textContent  = e.description || '';
+  document.getElementById('btn-cast').disabled = true;
+  document.getElementById('age-warn').style.display = 'none';
+
+  var list = document.getElementById('cand-list');
+  list.innerHTML = '';
+  e.candidates.forEach(function(c) {
+    var div = document.createElement('div');
+    div.className = 'cand';
+    div.dataset.id = c.id;
+    div.innerHTML =
+      '<span class="cand-sym">' + (c.symbol || '\u2b24') + '</span>' +
+      '<div class="cand-info">' +
+        '<div class="cand-name">' + esc(c.name) + '</div>' +
+        '<div class="cand-party">' + esc(c.party || 'Independent') + '</div>' +
+      '</div>' +
+      '<div class="cand-radio"></div>';
+    div.addEventListener('click', function(){ pickCand(c.id); });
+    list.appendChild(div);
+  });
+  showPanel('p-vote');
+}
+
+function pickCand(id) {
+  document.querySelectorAll('.cand').forEach(function(el) {
+    el.classList.remove('picked');
+    el.querySelector('.cand-radio').textContent = '';
+  });
+  var picked = document.querySelector('.cand[data-id="' + id + '"]');
+  if (picked) {
+    picked.classList.add('picked');
+    picked.querySelector('.cand-radio').textContent = '\u2713';
+  }
+  selCandId = id;
+  document.getElementById('btn-cast').disabled = false;
+}
+
+/* ── Cast vote ── */
+document.getElementById('btn-cast').addEventListener('click', function() {
+  if (!selElection || !selCandId) { setAlert('Please select a candidate.'); return; }
+
+  var btn = document.getElementById('btn-cast');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spin"></span> Submitting\u2026';
+
+  fetch('/api/voting/cast', {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({ electionId:selElection.id, candidateId:selCandId })
+  })
+  .then(function(r){ return r.json().then(function(d){ return {ok:r.ok,d:d}; }); })
+  .then(function(res) {
+    btn.disabled = false; btn.textContent = '\ud83d\uddf3\ufe0f Cast My Vote';
+    if (!res.ok) {
+      if (res.d.error && res.d.error.toLowerCase().indexOf('age') !== -1) {
+        document.getElementById('age-warn').style.display = 'flex';
+        document.getElementById('age-warn-txt').textContent = res.d.error;
+      } else {
+        setAlert(res.d.error || 'Vote failed.');
+      }
+      return;
+    }
+    document.getElementById('done-msg').textContent = res.d.message || 'Your vote has been recorded.';
+    showPanel('p-done');
+  })
+  .catch(function() {
+    btn.disabled = false; btn.textContent = '\ud83d\uddf3\ufe0f Cast My Vote';
+    setAlert('Network error. Try again.');
+  });
+});
+
+/* ── Sign out ── */
+function signOut() {
+  stopAuthCam();
+  _faceWarnShown = false;
+  faceVisible = false;
+  votedList = []; selElection = null; selCandId = null;
+  document.getElementById('f-vid').value = '';
+  var bar = document.getElementById('auth-face-bar');
+  if (bar) { bar.style.color = ''; bar.textContent = 'Look at the camera\u2026'; }
+  showPanel('p-auth');
+  startAuthCam(); /* restart camera for re-auth */
+}
+
+/* ── Escape HTML ── */
+function esc(str) {
+  return String(str || '')
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+    .replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+}
+</script>
+</body>
+</html>
