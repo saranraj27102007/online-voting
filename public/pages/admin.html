@@ -36,6 +36,9 @@
       <button class="sidebar-btn" data-tab="votelog"><span class="s-icon">📋</span> Vote Log</button>
       <button class="sidebar-btn" data-tab="create"><span class="s-icon">➕</span> New Election</button>
     </div>
+    <div class="sidebar-section" style="margin-top:auto;padding-top:16px;border-top:1px solid var(--border);">
+      <button class="sidebar-btn" data-tab="settings"><span class="s-icon">⚙️</span> Settings</button>
+    </div>
   </aside>
 
   <main class="main-content">
@@ -174,6 +177,36 @@
           <button type="button" class="btn btn-secondary btn-sm mt-8" id="add-candidate-btn">+ Add Candidate</button>
         </div>
         <button class="btn btn-primary btn-lg" id="create-election-btn">🗳️ Create Election</button>
+      </div>
+    </div>
+
+    <!-- Settings tab -->
+    <div id="tab-settings" class="tab-content">
+      <div class="page-header"><h2>Settings</h2><p>Manage your admin account</p></div>
+      <div class="card" style="max-width:480px;">
+        <h3 style="font-size:1rem;font-weight:700;margin-bottom:18px;display:flex;align-items:center;gap:8px;">
+          🔒 Change Password
+        </h3>
+        <div id="pw-alert" style="margin-bottom:12px;"></div>
+        <div class="form-group">
+          <label class="form-label">Current Password</label>
+          <input type="password" id="pw-current" class="form-control" placeholder="Enter current password" autocomplete="current-password"/>
+        </div>
+        <div class="form-group">
+          <label class="form-label">New Password</label>
+          <input type="password" id="pw-new" class="form-control" placeholder="At least 8 characters" autocomplete="new-password"/>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Confirm New Password</label>
+          <input type="password" id="pw-confirm" class="form-control" placeholder="Repeat new password" autocomplete="new-password"/>
+        </div>
+        <div style="margin-bottom:16px;">
+          <div id="pw-strength-bar" style="height:4px;border-radius:99px;background:rgba(255,255,255,0.1);overflow:hidden;margin-bottom:4px;">
+            <div id="pw-strength-fill" style="height:100%;width:0%;border-radius:99px;transition:all 0.3s;"></div>
+          </div>
+          <span id="pw-strength-label" style="font-size:11px;color:var(--text-3);"></span>
+        </div>
+        <button class="btn btn-primary btn-block" id="pw-change-btn">🔒 Change Password</button>
       </div>
     </div>
 
@@ -654,6 +687,82 @@
   }, 30000);
 
   init();
+  /* ─── Password strength meter ──────────────────────── */
+  document.getElementById('pw-new').addEventListener('input', function() {
+    var pw = this.value;
+    var fill = document.getElementById('pw-strength-fill');
+    var label = document.getElementById('pw-strength-label');
+    var score = 0;
+    if (pw.length >= 8)  score++;
+    if (pw.length >= 12) score++;
+    if (/[A-Z]/.test(pw)) score++;
+    if (/[0-9]/.test(pw)) score++;
+    if (/[^A-Za-z0-9]/.test(pw)) score++;
+    var levels = [
+      { w:'0%',   c:'transparent',    t:'' },
+      { w:'25%',  c:'#ff4d6d',        t:'Weak' },
+      { w:'50%',  c:'#ffb830',        t:'Fair' },
+      { w:'75%',  c:'#4f83ff',        t:'Good' },
+      { w:'100%', c:'#00d68f',        t:'Strong' },
+    ];
+    var l = levels[Math.min(score, 4)];
+    fill.style.width = l.w; fill.style.background = l.c;
+    label.textContent = l.t ? ('Strength: ' + l.t) : '';
+    label.style.color = l.c;
+  });
+
+  /* ─── Change password ───────────────────────────────── */
+  document.getElementById('pw-change-btn').addEventListener('click', async function() {
+    var btn      = this;
+    var cur      = document.getElementById('pw-current').value;
+    var nw       = document.getElementById('pw-new').value;
+    var conf     = document.getElementById('pw-confirm').value;
+    var alertEl  = document.getElementById('pw-alert');
+
+    function setAlert(type, msg) {
+      alertEl.innerHTML = msg
+        ? '<div class="alert alert-' + type + '" style="margin-bottom:0;">' + msg + '</div>'
+        : '';
+    }
+
+    if (!cur || !nw || !conf) return setAlert('warning', '⚠️ All fields are required.');
+    if (nw.length < 8) return setAlert('warning', '⚠️ New password must be at least 8 characters.');
+    if (nw !== conf)   return setAlert('warning', '⚠️ New passwords do not match.');
+    if (cur === nw)    return setAlert('warning', '⚠️ New password must be different from current password.');
+
+    btn.disabled = true;
+    btn.textContent = 'Changing…';
+    try {
+      var res  = await fetch('/api/admin/change-password', {
+        method: 'POST', credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ currentPassword: cur, newPassword: nw })
+      });
+      var data = await res.json();
+      if (!res.ok) {
+        setAlert('danger', '❌ ' + (data.error || 'Failed to change password.'));
+      } else {
+        setAlert('success', '✅ Password changed successfully! Use your new password next login.');
+        document.getElementById('pw-current').value = '';
+        document.getElementById('pw-new').value = '';
+        document.getElementById('pw-confirm').value = '';
+        document.getElementById('pw-strength-fill').style.width = '0%';
+        document.getElementById('pw-strength-label').textContent = '';
+      }
+    } catch(e) {
+      setAlert('danger', '❌ Network error. Please try again.');
+    }
+    btn.disabled = false;
+    btn.textContent = '🔒 Change Password';
+  });
+
+  /* ─── Enter key on password fields ─────────────────── */
+  ['pw-current','pw-new','pw-confirm'].forEach(function(id) {
+    document.getElementById(id).addEventListener('keydown', function(e) {
+      if (e.key === 'Enter') document.getElementById('pw-change-btn').click();
+    });
+  });
+
 })();
 </script>
 </body>

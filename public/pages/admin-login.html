@@ -2,34 +2,81 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8"/>
-<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0,user-scalable=no"/>
 <title>Admin Login — VoteSecure</title>
 <link rel="stylesheet" href="/css/style.css"/>
+<script src="https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/dist/face-api.min.js" crossorigin="anonymous"></script>
+<script src="/js/face-engine.js"></script>
+<style>
+.face-auth-card {
+  width:100%; max-width:480px;
+  background:var(--glass);
+  border:1px solid var(--border);
+  border-radius:var(--r-xl);
+  box-shadow:var(--shadow-lg);
+  position:relative; z-index:1;
+}
+.face-auth-card::before {
+  content:''; position:absolute;
+  top:0; left:0; right:0; height:1px;
+  background:linear-gradient(90deg,transparent,rgba(168,85,247,0.5),transparent);
+}
+.af-cam-hero {
+  position:relative; width:100%;
+  aspect-ratio:4/3; min-height:260px;
+  background:#0a0e28; overflow:hidden;
+  border-radius:var(--r-xl) var(--r-xl) 0 0;
+  transform:translateZ(0); -webkit-transform:translateZ(0);
+  will-change:transform; isolation:isolate;
+}
+.af-cam-hero video  { position:absolute; inset:0; width:100%; height:100%; object-fit:cover; display:block; }
+.af-cam-hero canvas { position:absolute; top:0; left:0; width:100%; height:100%; pointer-events:none; }
+.af-top-bar {
+  position:absolute; top:0; left:0; right:0; padding:12px 16px;
+  display:flex; justify-content:space-between; align-items:center;
+  background:linear-gradient(to bottom,rgba(0,0,0,0.75),transparent); z-index:2;
+}
+.af-status-bar {
+  position:absolute; bottom:0; left:0; right:0; padding:14px 16px;
+  background:linear-gradient(to top,rgba(0,0,0,0.88),transparent);
+  color:#fff; font-size:13px; font-weight:600; text-align:center;
+  transition:color 0.3s; z-index:2;
+}
+.af-lux { padding:3px 10px; border-radius:99px; font-size:10.5px; font-weight:700; color:#fff; background:rgba(0,0,0,0.55); }
+.af-cam-hero.scanning { box-shadow:inset 0 0 0 3px #a855f7, 0 0 24px rgba(168,85,247,0.4); animation:af-scan 1.8s ease-in-out infinite; }
+.af-cam-hero.liveness { box-shadow:inset 0 0 0 3px var(--amber),0 0 24px rgba(255,184,48,0.4); animation:af-amber 1.8s ease-in-out infinite; }
+.af-cam-hero.verified { box-shadow:inset 0 0 0 3px var(--green),0 0 28px rgba(0,214,143,0.5); }
+@keyframes af-scan  { 0%,100%{box-shadow:inset 0 0 0 3px #a855f7,0 0 18px rgba(168,85,247,0.3);}  50%{box-shadow:inset 0 0 0 3px #a855f7,0 0 44px rgba(168,85,247,0.7);} }
+@keyframes af-amber { 0%,100%{box-shadow:inset 0 0 0 3px var(--amber),0 0 18px rgba(255,184,48,0.3);} 50%{box-shadow:inset 0 0 0 3px var(--amber),0 0 44px rgba(255,184,48,0.7);} }
+.af-body { padding:20px 28px 28px; }
+.step-dots { display:flex; gap:7px; justify-content:center; margin-bottom:20px; }
+.step-dot  { width:8px; height:8px; border-radius:50%; background:rgba(255,255,255,0.18); transition:all 0.3s; }
+.step-dot.active { background:#a855f7; box-shadow:0 0 8px rgba(168,85,247,0.7); }
+.step-dot.done   { background:var(--green); }
+</style>
 </head>
 <body>
 <div class="bg-grid"></div>
 
 <nav class="navbar">
-  <a href="/" class="navbar-brand">
-    <div class="logo-icon">🗳️</div>
-    VoteSecure
-  </a>
+  <a href="/" class="navbar-brand"><div class="logo-icon">🗳️</div> VoteSecure</a>
 </nav>
 
-<div class="auth-wrap" style="padding-top:0;">
-  <div class="auth-card" style="max-width:420px;">
-    <div class="landing-orb" style="width:280px;height:280px;top:-60px;right:-60px;background:radial-gradient(circle,rgba(168,85,247,0.14) 0%,transparent 70%);"></div>
+<div class="auth-wrap" id="auth-wrap" style="padding-top:80px;align-items:flex-start;">
 
+  <!-- ══ STEP 1 · Credentials ══ -->
+  <div class="auth-card" id="step-creds" style="max-width:420px;">
+    <div class="landing-orb" style="width:280px;height:280px;top:-60px;right:-60px;background:radial-gradient(circle,rgba(168,85,247,0.14) 0%,transparent 70%);"></div>
+    <div class="step-dots">
+      <div class="step-dot active" id="dot-s1"></div>
+      <div class="step-dot" id="dot-s2"></div>
+    </div>
     <div class="auth-logo" style="background:linear-gradient(135deg,#7c3aed,#a855f7);box-shadow:0 8px 24px rgba(168,85,247,0.35);">⚙️</div>
     <h1 class="auth-title">Admin Login</h1>
     <p class="auth-sub">Authorized administrators only</p>
-
-    <!-- Security notice -->
     <div class="alert alert-warning" style="font-size:12px;margin-bottom:18px;">
-      🔒 <strong>Protected:</strong> 5 failed attempts triggers a 15-minute lockout. All logins are logged.
+      🔒 <strong>Protected:</strong> 5 failed attempts triggers a 15-minute lockout. Face verification required.
     </div>
-
-    <!-- Attempt dots -->
     <div id="attempt-wrap" class="hidden" style="text-align:center;margin-bottom:14px;">
       <div style="display:flex;gap:6px;justify-content:center;margin-bottom:6px;" id="attempt-dots">
         <span class="dot-el" style="width:12px;height:12px;border-radius:50%;background:rgba(255,255,255,0.12);display:inline-block;transition:background .3s;"></span>
@@ -40,9 +87,7 @@
       </div>
       <div id="attempt-txt" style="font-size:11.5px;color:var(--text-3);"></div>
     </div>
-
-    <div id="main-alert"></div>
-
+    <div id="creds-alert"></div>
     <div class="form-group">
       <label class="form-label">Username</label>
       <input type="text" id="username-input" class="form-control" placeholder="Enter username" autocomplete="username"/>
@@ -51,88 +96,523 @@
       <label class="form-label">Password</label>
       <input type="password" id="password-input" class="form-control" placeholder="Enter password" autocomplete="current-password"/>
     </div>
-
-    <button class="btn btn-primary btn-block btn-lg" id="login-btn">Login to Admin Panel</button>
+    <button class="btn btn-block btn-lg" id="login-btn"
+      style="background:linear-gradient(135deg,#7c3aed,#a855f7);color:#fff;font-weight:700;border:none;border-radius:var(--r-md);padding:14px;cursor:pointer;font-size:15px;box-shadow:0 8px 24px rgba(168,85,247,0.35);">
+      Continue → Face Verification
+    </button>
     <div style="text-align:center;margin-top:16px;">
       <a href="/" style="font-size:13px;color:var(--text-3);text-decoration:none;">← Back to Home</a>
     </div>
   </div>
-</div>
+
+  <!-- ══ STEP 2 · Face Liveness ══ -->
+  <div class="face-auth-card hidden" id="step-face">
+
+    <!-- 2a · Loading models -->
+    <div id="af-load-panel">
+      <div style="padding:44px 28px;text-align:center;">
+        <div style="font-size:3.2rem;margin-bottom:16px;animation:spin-slow 3s linear infinite;">🤖</div>
+        <h2 style="margin-bottom:8px;">Loading Face AI</h2>
+        <p style="color:var(--text-2);font-size:13px;margin-bottom:24px;">Downloading recognition models (~2 MB)<br>Cached after first load.</p>
+        <div class="prog-wrap" style="max-width:280px;margin:0 auto 12px;">
+          <div class="prog-fill" id="af-load-bar" style="width:0%;background:linear-gradient(90deg,#7c3aed,#a855f7);"></div>
+        </div>
+        <p id="af-load-status" style="font-size:12px;color:var(--text-3);">Initialising…</p>
+      </div>
+    </div>
+
+    <!-- 2b · Camera + liveness -->
+    <div id="af-cam-panel" style="display:none;">
+      <div class="af-cam-hero scanning" id="af-cam-hero">
+        <div id="af-placeholder" style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;background:#0a0e28;z-index:1;">
+          <div style="font-size:3rem;margin-bottom:10px;opacity:0.4;">📷</div>
+          <div style="font-size:12px;color:rgba(255,255,255,0.3);">Starting camera…</div>
+        </div>
+        <video id="af-vid" autoplay muted playsinline
+          style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:block;transform:translateZ(0);-webkit-transform:translateZ(0);will-change:transform;"></video>
+        <canvas id="af-overlay"></canvas>
+        <div class="af-top-bar">
+          <span class="af-lux" id="af-lux-chip">💡 —</span>
+          <div style="display:flex;gap:6px;align-items:center;">
+            <button class="btn-icon" id="af-cam-switch-btn" style="width:30px;height:30px;display:none;font-size:16px;" title="Switch camera">📷</button>
+            <button class="btn-icon" id="af-boost-btn" style="width:30px;height:30px;" title="Brightness boost">☀️</button>
+          </div>
+        </div>
+        <div id="af-cam-select-wrap" style="display:none;position:absolute;top:48px;right:8px;z-index:10;background:rgba(10,14,40,0.96);border:1px solid rgba(168,85,247,0.4);border-radius:10px;padding:8px;min-width:220px;box-shadow:0 8px 24px rgba(0,0,0,0.6);">
+          <div style="font-size:10px;color:rgba(255,255,255,0.4);font-weight:700;text-transform:uppercase;letter-spacing:.08em;margin-bottom:6px;padding:0 4px;">Select Camera</div>
+          <select id="af-cam-select" style="width:100%;background:transparent;border:none;color:#fff;font-size:12px;padding:4px;cursor:pointer;outline:none;"></select>
+        </div>
+        <div class="af-status-bar" id="af-status-bar">🔍 Looking for your face…</div>
+      </div>
+
+      <div class="af-body">
+        <div class="blink-indicator" id="af-blink-indicator" style="display:none;">
+          <div class="blink-eye">👁</div>
+          <div style="flex:1;">
+            <div style="font-weight:700;font-size:13px;color:var(--amber);margin-bottom:4px;">Liveness Check — Blink naturally</div>
+            <div style="font-size:12px;color:var(--text-2);margin-bottom:6px;">Blink <strong id="af-blinks-needed">1</strong> time to confirm you're present</div>
+            <div class="blink-dots"><div class="blink-dot" id="af-dot-0"></div></div>
+          </div>
+        </div>
+        <div class="step-dots" style="margin:14px 0 4px;">
+          <div class="step-dot done"></div>
+          <div class="step-dot active"></div>
+        </div>
+        <p style="text-align:center;font-size:12px;color:var(--text-3);">Step 2 of 2 — Liveness verification</p>
+        <div id="af-cam-alert" style="margin-top:10px;"></div>
+        <button class="btn btn-ghost btn-block mt-8" id="af-retry-cam-btn" style="display:none;color:var(--amber);">🔄 Retry Camera</button>
+        <button class="btn btn-secondary btn-block mt-8" id="af-back-btn">← Back to Login</button>
+      </div>
+    </div>
+
+    <!-- 2c · Processing -->
+    <div id="af-proc-panel" style="display:none;">
+      <div style="padding:56px 28px;text-align:center;">
+        <div style="font-size:3rem;margin-bottom:16px;">🔬</div>
+        <p id="af-proc-txt" style="font-weight:700;font-size:15px;margin-bottom:16px;">Verifying liveness…</p>
+        <div class="prog-wrap" style="max-width:240px;margin:0 auto;">
+          <div class="prog-fill" id="af-proc-bar" style="width:10%;background:linear-gradient(90deg,#7c3aed,#a855f7);"></div>
+        </div>
+      </div>
+    </div>
+
+  </div><!-- .face-auth-card -->
+
+</div><!-- .auth-wrap -->
 
 <script>
 (function () {
   'use strict';
 
-  var failCount = 0;
-  var loginBtn  = document.getElementById('login-btn');
-  var mainAlert = document.getElementById('main-alert');
-  var usernameInput = document.getElementById('username-input');
-  var passwordInput = document.getElementById('password-input');
+  // ── State ────────────────────────────────────────────
+  var failCount      = 0;
+  var afStream       = null;
+  var afDetActive    = false;
+  var afDetTimer     = null;
+  var afLiveness     = null;
+  var afLivenessOK   = false;
+  var afCapturing    = false;
+  var afBoostOn      = false;
+  var afLuxTimer     = null;
+  var afCameras      = [];
+  var afSelCamId     = null;
+  var afVid          = null;
+  var afOverlay      = null;
+  var afCamHero      = null;
+  var afStatusBar    = null;
+  var afBlinkWrap    = null;
 
-  // Redirect if already logged in
-  fetch('/api/admin/me', { credentials: 'include' }).then(function(r){return r.json();}).then(function(d){
-    if (d.admin) location.href = '/admin';
-  });
+  // ── Helpers ──────────────────────────────────────────
+  function delay(ms){ return new Promise(function(r){ setTimeout(r,ms); }); }
 
-  if (location.search.includes('auth=required')) {
-    mainAlert.innerHTML = '<div class="alert alert-warning">⚠️ Admin login required to access that page.</div>';
+  function showAlert(id, type, msg){
+    var el = document.getElementById(id);
+    if (!el) return;
+    el.innerHTML = msg ? '<div class="alert alert-'+type+'" style="margin-bottom:0;">'+msg+'</div>' : '';
   }
 
-  function updateDots() {
-    var dots = document.querySelectorAll('.dot-el');
-    document.getElementById('attempt-wrap').classList.remove('hidden');
-    dots.forEach(function (d, i) {
-      d.style.background = i < failCount
-        ? 'var(--red)'
-        : 'rgba(255,255,255,0.12)';
+  function showStep(s){
+    document.getElementById('step-creds').classList.toggle('hidden', s!=='creds');
+    document.getElementById('step-face').classList.toggle('hidden',  s!=='face');
+  }
+
+  function showPanel(p){
+    ['load','cam','proc'].forEach(function(n){
+      var el = document.getElementById('af-'+n+'-panel');
+      if (el) el.style.display = (n===p) ? 'block' : 'none';
     });
-    var rem = 5 - failCount;
-    document.getElementById('attempt-txt').textContent = rem > 0
-      ? '⚠️ ' + rem + ' attempt' + (rem === 1 ? '' : 's') + ' remaining'
+  }
+
+  function setLoad(msg,pct){
+    document.getElementById('af-load-status').textContent = msg;
+    document.getElementById('af-load-bar').style.width    = pct+'%';
+  }
+
+  function setProc(msg,pct){
+    document.getElementById('af-proc-txt').textContent = msg;
+    document.getElementById('af-proc-bar').style.width = pct+'%';
+  }
+
+  function setStatus(msg,color){
+    if (afStatusBar){ afStatusBar.textContent=msg; afStatusBar.style.color=color||'#fff'; }
+  }
+
+  function updateBlinkDot(n){
+    var d = document.getElementById('af-dot-0');
+    if (d) d.className = 'blink-dot'+(n>=1?' filled':'');
+  }
+
+  // Redirect if already logged in
+  fetch('/api/admin/me',{credentials:'include'}).then(function(r){return r.json();}).then(function(d){
+    if (d.admin) location.href='/admin';
+  });
+
+  if (location.search.includes('auth=required')){
+    showAlert('creds-alert','warning','⚠️ Admin login required to access that page.');
+  }
+
+  // ── Attempt dots ─────────────────────────────────────
+  function updateDots(){
+    document.getElementById('attempt-wrap').classList.remove('hidden');
+    document.querySelectorAll('.dot-el').forEach(function(d,i){
+      d.style.background = i<failCount ? 'var(--red)' : 'rgba(255,255,255,0.12)';
+    });
+    var rem = 5-failCount;
+    document.getElementById('attempt-txt').textContent = rem>0
+      ? '⚠️ '+rem+' attempt'+(rem===1?'':'s')+' remaining'
       : '🔒 Account locked — wait 15 minutes';
   }
 
-  async function doLogin() {
-    var uname = usernameInput.value.trim();
-    var pwd   = passwordInput.value;
-    if (!uname || !pwd) {
-      mainAlert.innerHTML = '<div class="alert alert-danger">All fields are required.</div>';
-      return;
-    }
-    loginBtn.disabled = true;
-    loginBtn.innerHTML = '<span class="spinner"></span>&nbsp;Logging in…';
-    mainAlert.innerHTML = '';
+  // ══════════════════════════════════════════════════════
+  // STEP 1 — Verify credentials (no session created yet)
+  // ══════════════════════════════════════════════════════
+  async function doCredentials(){
+    var uname = document.getElementById('username-input').value.trim();
+    var pwd   = document.getElementById('password-input').value;
+    if (!uname||!pwd){ showAlert('creds-alert','danger','All fields are required.'); return; }
+
+    var btn = document.getElementById('login-btn');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner"></span>&nbsp;Checking credentials…';
+    showAlert('creds-alert','','');
+
     try {
-      var res  = await fetch('/api/admin/login', { credentials: 'include', 
-        method: 'POST', headers: {'Content-Type':'application/json'},
-        body: JSON.stringify({ username: uname, password: pwd })
+      var res  = await fetch('/api/admin/check-credentials',{
+        credentials:'include', method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({username:uname, password:pwd})
       });
       var data = await res.json();
       if (!res.ok) throw new Error(data.error);
-      location.href = '/admin';
-    } catch (e) {
-      var msg = e.message || 'Login failed.';
-      var isLocked = /lock|wait/i.test(msg);
-      if (isLocked) {
-        mainAlert.innerHTML = '<div style="background:var(--red-dim);border:1px solid rgba(255,77,109,0.3);border-radius:var(--r-md);padding:20px;text-align:center;">'
-          + '<div style="font-size:2rem;margin-bottom:8px;">🔒</div>'
-          + '<div style="font-weight:800;color:var(--red);margin-bottom:4px;">Account Locked</div>'
-          + '<div style="font-size:12.5px;color:var(--text-2);">' + msg + '</div></div>';
-        loginBtn.disabled = true;
+      // Credentials OK — go to face step
+      showStep('face');
+      launchFace();
+    } catch(e){
+      var msg = e.message||'Login failed.';
+      if (/lock|wait/i.test(msg)){
+        document.getElementById('creds-alert').innerHTML =
+          '<div style="background:var(--red-dim);border:1px solid rgba(255,77,109,0.3);border-radius:var(--r-md);padding:20px;text-align:center;">'
+          +'<div style="font-size:2rem;margin-bottom:8px;">🔒</div>'
+          +'<div style="font-weight:800;color:var(--red);margin-bottom:4px;">Account Locked</div>'
+          +'<div style="font-size:12.5px;color:var(--text-2);">'+msg+'</div></div>';
+        btn.disabled = true;
       } else {
-        failCount = Math.min(failCount + 1, 5);
+        failCount = Math.min(failCount+1,5);
         updateDots();
-        mainAlert.innerHTML = '<div class="alert alert-danger">❌ ' + msg + '</div>';
-        loginBtn.disabled = false;
-        loginBtn.innerHTML = 'Login to Admin Panel';
+        showAlert('creds-alert','danger','❌ '+msg);
+        btn.disabled = false;
+        btn.innerHTML = 'Continue → Face Verification';
       }
     }
   }
 
-  loginBtn.addEventListener('click', doLogin);
-  document.addEventListener('keydown', function(e) {
-    if (e.key === 'Enter') doLogin();
+  // ══════════════════════════════════════════════════════
+  // STEP 2 — Face liveness then finalize login
+  // ══════════════════════════════════════════════════════
+  async function launchFace(){
+    afCapturing=false; afLivenessOK=false; afLiveness=null; afBoostOn=false; afDetActive=false;
+    showPanel('load'); setLoad('Initialising…',5);
+
+    var fakePct=5;
+    var fakeT = setInterval(function(){
+      if (fakePct<80){ fakePct+=Math.random()*12; setLoad('Loading face mesh…',Math.min(fakePct,80)); }
+    },380);
+
+    try { await FaceEngine.load(); }
+    catch(err){
+      clearInterval(fakeT);
+      showPanel('cam');
+      showAlert('af-cam-alert','danger','❌ Could not load face AI. Check your internet.<br><small>'+err.message+'</small>');
+      document.getElementById('af-retry-cam-btn').style.display='block';
+      return;
+    }
+    clearInterval(fakeT); setLoad('Models ready!',100); await delay(80);
+
+    // Cache DOM refs now that panel is visible
+    afVid       = document.getElementById('af-vid');
+    afOverlay   = document.getElementById('af-overlay');
+    afCamHero   = document.getElementById('af-cam-hero');
+    afStatusBar = document.getElementById('af-status-bar');
+    afBlinkWrap = document.getElementById('af-blink-indicator');
+
+    showPanel('cam');
+    await openCamera();
+    if (!afStream) return;
+    await delay(400);
+    startLoop();
+  }
+
+  // ── Camera helpers ────────────────────────────────────
+  async function discoverCameras(){
+    try {
+      var tmp = await navigator.mediaDevices.getUserMedia({video:true});
+      tmp.getTracks().forEach(function(t){t.stop();});
+      var devs = await navigator.mediaDevices.enumerateDevices();
+      afCameras = devs.filter(function(d){return d.kind==='videoinput';})
+                      .map(function(d,i){return{deviceId:d.deviceId,label:d.label||('Camera '+(i+1))};});
+    } catch(e){ afCameras=[]; }
+  }
+
+  function camScore(cam){
+    var l=(cam.label||'').toLowerCase();
+    if (/virtual|obs|snap|ivcam|android|phone|mirror|manycam/i.test(l)) return -10;
+    if (/integrated|built.?in|hd webcam|hp|laptop|internal/i.test(l)) return 10;
+    return 1;
+  }
+
+  function buildCamSelect(){
+    var btn  = document.getElementById('af-cam-switch-btn');
+    var wrap = document.getElementById('af-cam-select-wrap');
+    var sel  = document.getElementById('af-cam-select');
+    if (!sel||afCameras.length<=1){ if(btn)btn.style.display='none'; if(wrap)wrap.style.display='none'; return; }
+    sel.innerHTML='';
+    var sorted = afCameras.slice().sort(function(a,b){return camScore(b)-camScore(a);});
+    sorted.forEach(function(cam){
+      var opt=document.createElement('option');
+      opt.value=cam.deviceId;
+      var s=camScore(cam);
+      opt.textContent=(s<=-10?'⚠️':s>=10?'✅':'📷')+' '+(cam.label||'Camera');
+      sel.appendChild(opt);
+    });
+    if (!afSelCamId) afSelCamId=sorted[0].deviceId;
+    sel.value=afSelCamId;
+    if (btn)  btn.style.display='flex';
+    if (wrap) wrap.style.display='none';
+    sel.onchange=async function(){
+      afSelCamId=sel.value;
+      if(wrap) wrap.style.display='none';
+      await openCamera(); await delay(400); startLoop();
+    };
+  }
+
+  async function openCamera(){
+    stopCamera();
+    if (!afCameras.length) await discoverCameras();
+    buildCamSelect();
+
+    var cons = afSelCamId
+      ? [{ video:{deviceId:{exact:afSelCamId},width:{ideal:1280},height:{ideal:720}} },
+         { video:{deviceId:{exact:afSelCamId}} }, { video:true }]
+      : [{ video:{width:{ideal:1280},height:{ideal:720}} },
+         { video:{width:{ideal:640}, height:{ideal:480}} }, { video:true }];
+
+    for (var i=0;i<cons.length;i++){
+      try{ afStream=await navigator.mediaDevices.getUserMedia(cons[i]); break; }catch(e){}
+    }
+    if (!afStream){
+      showAlert('af-cam-alert','danger','❌ Camera not found or access denied.<br>Allow camera permission and click <strong>Retry Camera</strong>.');
+      document.getElementById('af-retry-cam-btn').style.display='block';
+      return;
+    }
+
+    afVid=document.getElementById('af-vid');
+    if (!afVid) return;
+    afVid.pause(); afVid.srcObject=null;
+    await new Promise(function(r){setTimeout(r,80);});
+    afVid.srcObject=afStream;
+    applyBoost();
+
+    await new Promise(function(resolve){
+      if (afVid.readyState>=2){resolve();return;}
+      var done=false;
+      function fin(){if(!done){done=true;resolve();}}
+      afVid.onloadeddata=fin; afVid.onloadedmetadata=fin; afVid.oncanplay=fin;
+      setTimeout(fin,5000);
+    });
+    try{ await afVid.play(); }catch(e){ afVid.muted=true; try{await afVid.play();}catch(e2){} }
+    await new Promise(function(r){setTimeout(r,400);});
+
+    var ph=document.getElementById('af-placeholder');
+    if (ph) ph.style.display='none';
+    if (afVid.videoWidth===0||afVid.videoHeight===0){
+      afVid.style.display='none';
+      await new Promise(function(r){setTimeout(r,100);});
+      afVid.style.display='block';
+      await new Promise(function(r){setTimeout(r,400);});
+    }
+    afLuxTimer=setInterval(measureLux,900);
+  }
+
+  function stopCamera(){
+    stopLoop();
+    clearInterval(afLuxTimer); afLuxTimer=null;
+    if (afStream){ afStream.getTracks().forEach(function(t){t.stop();}); afStream=null; }
+    if (afVid) afVid.srcObject=null;
+    var ph=document.getElementById('af-placeholder');
+    if (ph) ph.style.display='flex';
+  }
+
+  function applyBoost(){
+    var v=document.getElementById('af-vid'); if(!v)return; afVid=v;
+    v.style.filter=afBoostOn?'brightness(2.5) contrast(1.6)':'brightness(1.6) contrast(1.2)';
+  }
+
+  function measureLux(){
+    try{
+      var c=document.createElement('canvas'); c.width=80; c.height=60;
+      var v=document.getElementById('af-vid')||afVid;
+      var ctx=c.getContext('2d'); ctx.drawImage(v,0,0,80,60);
+      var px=ctx.getImageData(0,0,80,60).data,s=0;
+      for(var i=0;i<px.length;i+=16) s+=(px[i]+px[i+1]+px[i+2])/3;
+      var lux=s/(px.length/16);
+      var chip=document.getElementById('af-lux-chip');
+      if(chip) chip.textContent=lux<50?'🌑 Very Dark':lux<90?'🌙 Low Light':lux<160?'💡 OK':'☀️ Good Light';
+    }catch(e){}
+  }
+
+  // ── Detection loop ────────────────────────────────────
+  function startLoop(){
+    stopLoop();
+    afDetActive=true; afCapturing=false; afLivenessOK=false;
+    afLiveness=FaceEngine.LivenessDetector(1);
+    if (afBlinkWrap) afBlinkWrap.style.display='none';
+    if (afCamHero)   afCamHero.className='af-cam-hero scanning';
+    showAlert('af-cam-alert','','');
+    setStatus('🔍 Look straight at camera — keep face centred','#fff');
+
+    var _last=0, _FRAME=50, _noFace=0;
+
+    var _failsafe=setTimeout(function(){
+      if (!afLivenessOK&&afDetActive)
+        setStatus('⚠️ Detection struggling — ensure good lighting','var(--amber)');
+    },8000);
+
+    (async function loop(ts){
+      if (!afDetActive||afCapturing) return;
+      if ((ts||0)-_last<_FRAME){ afDetTimer=requestAnimationFrame(loop); return; }
+      _last=ts||0;
+      try{
+        var v=document.getElementById('af-vid')||afVid;
+        if (!v||!v.videoWidth||!v.videoHeight||v.readyState<2){
+          if (afDetActive&&!afCapturing) afDetTimer=requestAnimationFrame(loop); return;
+        }
+        var result=await FaceEngine.detect(v);
+        if (!afDetActive) return;
+
+        if (!result){
+          _noFace++;
+          FaceEngine.clearOverlay(afOverlay);
+          if (afCamHero) afCamHero.className='af-cam-hero scanning';
+          if (afBlinkWrap) afBlinkWrap.style.display='none';
+          if (afLiveness&&_noFace>3){ afLiveness.reset(); updateBlinkDot(0); }
+          if (_noFace<15)      setStatus('🔍 Keep face visible — do NOT cover with hands','#fff');
+          else if (_noFace<40) setStatus('💡 No face found — better lighting, move closer','#fff');
+          else                 setStatus('⚠️ Face not detected — lift chin, face camera','var(--amber)');
+
+        } else if (!afLivenessOK){
+          _noFace=0;
+          var blinks=afLiveness.update(result.landmarks);
+          var calib=afLiveness.isCalibrated();
+          FaceEngine.drawOverlay(afOverlay,v,result,'liveness');
+          if (afCamHero) afCamHero.className='af-cam-hero liveness';
+
+          if (!calib){
+            if (afBlinkWrap) afBlinkWrap.style.display='none';
+            setStatus('👁  Face detected! Keep eyes open to calibrate…','var(--amber)');
+          } else {
+            updateBlinkDot(blinks);
+            if (afBlinkWrap) afBlinkWrap.style.display='flex';
+            document.getElementById('af-blinks-needed').textContent=Math.max(0,1-blinks);
+            setStatus('👁  Blink once naturally to confirm liveness','var(--amber)');
+          }
+
+          if (afLiveness.complete()){
+            afLivenessOK=true;
+            clearTimeout(_failsafe);
+            if (afBlinkWrap) afBlinkWrap.style.display='none';
+            FaceEngine.drawOverlay(afOverlay,v,result,'verified');
+            if (afCamHero) afCamHero.className='af-cam-hero verified';
+            setStatus('✅ Liveness confirmed — logging in…','var(--green)');
+            await delay(350);
+            if (afDetActive&&!afCapturing) finishLogin();
+            return;
+          }
+        } else {
+          FaceEngine.drawOverlay(afOverlay,v,result,'verified');
+          if (afCamHero) afCamHero.className='af-cam-hero verified';
+          setStatus('✅ Verified — logging in…','var(--green)');
+        }
+      }catch(e){ console.warn('Admin face frame error:',e.message); }
+      if (afDetActive&&!afCapturing) afDetTimer=requestAnimationFrame(loop);
+    })();
+  }
+
+  function stopLoop(){
+    afDetActive=false;
+    if (afDetTimer){ cancelAnimationFrame(afDetTimer); afDetTimer=null; }
+    if (afOverlay) FaceEngine.clearOverlay(afOverlay);
+  }
+
+  // ── Finalize: create session after liveness pass ──────
+  async function finishLogin(){
+    if (afCapturing) return;
+    afCapturing=true; stopLoop(); showPanel('proc'); setProc('Liveness confirmed — creating session…',50);
+    try{
+      stopCamera();
+      var uname=document.getElementById('username-input').value.trim();
+      var pwd  =document.getElementById('password-input').value;
+      setProc('Authenticating…',75);
+      var res =await fetch('/api/admin/login',{
+        credentials:'include', method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({username:uname,password:pwd})
+      });
+      var data=await res.json();
+      if (!res.ok) throw new Error(data.error||'Login failed.');
+      setProc('✅ Access granted!',100);
+      await delay(300);
+      location.href='/admin';
+    }catch(e){
+      afCapturing=false;
+      showStep('creds');
+      showAlert('creds-alert','danger','❌ '+(e.message||'Session error. Please try again.'));
+      var btn=document.getElementById('login-btn');
+      btn.disabled=false; btn.innerHTML='Continue → Face Verification';
+    }
+  }
+
+  // ══════════════════════════════════════════════════════
+  // EVENT LISTENERS
+  // ══════════════════════════════════════════════════════
+  document.getElementById('login-btn').addEventListener('click', doCredentials);
+
+  document.addEventListener('keydown', function(e){
+    if (e.key!=='Enter') return;
+    if (!document.getElementById('step-creds').classList.contains('hidden')) doCredentials();
   });
+
+  document.getElementById('af-back-btn').addEventListener('click', function(){
+    stopCamera(); afCapturing=false;
+    showStep('creds');
+    var btn=document.getElementById('login-btn');
+    btn.disabled=false; btn.innerHTML='Continue → Face Verification';
+  });
+
+  document.getElementById('af-boost-btn').addEventListener('click', function(){
+    afBoostOn=!afBoostOn;
+    this.style.background=afBoostOn?'rgba(168,85,247,0.6)':'';
+    applyBoost();
+  });
+
+  document.getElementById('af-cam-switch-btn').addEventListener('click', function(e){
+    e.stopPropagation();
+    var w=document.getElementById('af-cam-select-wrap');
+    if (w) w.style.display=w.style.display==='none'?'block':'none';
+  });
+
+  document.addEventListener('click', function(){
+    var w=document.getElementById('af-cam-select-wrap');
+    if (w) w.style.display='none';
+  });
+
+  document.getElementById('af-retry-cam-btn').addEventListener('click', function(){
+    this.style.display='none'; showAlert('af-cam-alert','','');
+    afSelCamId=null; afCameras=[];
+    openCamera().then(function(){ if(afStream) delay(400).then(startLoop); });
+  });
+
+  window.addEventListener('beforeunload', stopCamera);
+
 })();
 </script>
 </body>

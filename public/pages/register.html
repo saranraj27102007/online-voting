@@ -1181,7 +1181,7 @@ function _setLoadStatus(msg, pct) {
 function startFaceDetectionLoop() {
   _stopDet();
   _detActive = true;
-  _faceLiveness = FaceEngine.LivenessDetector(2); // require 2 blinks for registration
+  _faceLiveness = FaceEngine.LivenessDetector(1);  // 1 blink is enough for liveness // require 2 blinks for registration
   _livenessOK = false;
 
   var vid     = document.getElementById('face-vid');
@@ -1191,7 +1191,7 @@ function startFaceDetectionLoop() {
   _luxLoop2 = setInterval(function () { if (vid && vid.videoWidth) _measureFaceLux(vid); }, 1500);
 
   var _regLastFrame  = 0;
-  var _REG_FRAME_MS  = 100;  // 10fps — enough for blinks, easy on CPU
+  var _REG_FRAME_MS  = 50;   // 20fps — needed to catch fast blinks reliably
   var _noFaceFrames  = 0;    // count consecutive no-detection frames
   var _manualEnabled = false;
 
@@ -1224,13 +1224,18 @@ function startFaceDetectionLoop() {
         camWrap.className = 'face-cam-wrap scanning';
         document.getElementById('blink-indicator').style.display = 'none';
         if (!_manualEnabled) document.getElementById('snap-face-btn').disabled = true;
-        // Progressive hints based on how long we've been searching
+        // Reset liveness if face disappears — prevents hand-cover triggering blink count
+        if (_faceLiveness && _noFaceFrames > 3) {
+          _faceLiveness.reset();
+          _updateBlinkDots(0);
+        }
+        // Progressive hints
         if (_noFaceFrames < 15) {
-          _setFaceStatus('🔍 Searching for face — look directly at camera', '#fff');
+          _setFaceStatus('🔍 Keep face visible — do NOT cover face with hands', '#fff');
         } else if (_noFaceFrames < 40) {
-          _setFaceStatus('💡 No face found — try better lighting or move closer', '#fff');
+          _setFaceStatus('💡 No face found — better lighting, move closer', '#fff');
         } else {
-          _setFaceStatus('⚠️ Still searching — lift chin, face the camera fully', 'var(--amber)');
+          _setFaceStatus('⚠️ Face not detected — lift chin, face camera, no obstructions', 'var(--amber)');
         }
 
       } else if (!_livenessOK) {
@@ -1245,13 +1250,13 @@ function startFaceDetectionLoop() {
         if (!calibrated) {
           // Still measuring your open-eye baseline (first ~12 frames with face visible)
           document.getElementById('blink-indicator').style.display = 'none';
-          _setFaceStatus('👁  Face detected! Keep eyes open for 1 second to calibrate…', 'var(--amber)');
+          _setFaceStatus('👁  Keep eyes open & face visible — calibrating…', 'var(--amber)');
         } else {
           // Calibrated — now count blinks
           document.getElementById('blink-indicator').style.display = 'flex';
-          var needed = Math.max(0, 2 - blinks);
-          document.getElementById('blinks-needed').textContent = needed;
-          _setFaceStatus('👁  Blink ' + needed + ' more time' + (needed !== 1 ? 's' : '') + ' to confirm liveness', 'var(--amber)');
+          var needed = Math.max(0, 1 - blinks);
+          document.getElementById('blinks-needed').textContent = Math.max(0, 1 - blinks);
+          _setFaceStatus('👁  Blink once naturally — keep face fully visible', 'var(--amber)');
         }
 
         if (_faceLiveness.complete()) {
@@ -1325,16 +1330,39 @@ async function snapFace() {
     var isFront  = !(settings.facingMode === 'environment' || (!isMobile && facingMode !== 'user'));
     capturedCanvas = FaceEngine.captureFrame(vid, isMobile, isFront);
 
-    setProc('Extracting face features…', 70);
-    // Use detectWithDescriptor for final capture — gets 128-D descriptor (slower is OK here)
-    // In manual mode, descriptor extraction may return null if face not perfectly centred —
-    // we still proceed and fallback to blink_liveness type
+    setProc('Extracting face features…', 65);
+    // Capture 3 descriptors from live video for a robust registration template
+    var vid = document.getElementById('face-vid');
+    var multiDescs = [];
+    try {
+      multiDescs = await FaceEngine.detectMultipleDescriptors(vid);
+    } catch(e) {}
+
+    // Also try the captured canvas as a fallback
     var snapResult = await FaceEngine.detectWithDescriptor(capturedCanvas);
 
-    setProc('Saving face data…', 85);
+    setProc('Selecting best face data…', 80);
 
-    // Store the real 128-D descriptor so login face-match works
-    finalDesc    = snapResult && snapResult.descriptor ? Array.from(snapResult.descriptor) : new Array(128).fill(0);
+    // Pick descriptor with highest variance (most informative) from all captures
+    var allDescs = multiDescs.slice();
+    if (snapResult && snapResult.descriptor) allDescs.push(Array.from(snapResult.descriptor));
+
+    function descVariance(d) {
+      var mean = d.reduce(function(a,b){ return a+b; }, 0) / d.length;
+      return d.reduce(function(a,b){ return a + (b-mean)*(b-mean); }, 0) / d.length;
+    }
+
+    var bestDesc = null;
+    if (allDescs.length > 0) {
+      bestDesc = allDescs.reduce(function(best, d) {
+        return descVariance(d) > descVariance(best) ? d : best;
+      });
+    }
+
+    setProc('Saving face data…', 90);
+
+    // Store the best 128-D descriptor
+    finalDesc    = bestDesc || (snapResult && snapResult.descriptor ? Array.from(snapResult.descriptor) : new Array(128).fill(0));
     faceDescType = (finalDesc.some(function(v){ return v !== 0; })) ? 'faceapi' : 'blink_liveness';
 
     setProc('Face registered!', 100);
@@ -1499,12 +1527,21 @@ function showDone(data){
     +'<p style="color:var(--text-2);font-size:13.5px;margin-bottom:18px;">Download your Voter ID card &mdash; you need it to login and vote.</p>'
     +'<canvas id="voter-id-canvas" style="display:block;max-width:340px;width:100%;margin:0 auto 16px;border-radius:16px;box-shadow:0 12px 40px rgba(79,131,255,0.3);"></canvas>'
     +'<div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap;margin-bottom:14px;">'
-    +'<button onclick="downloadVoterCard()" class="btn btn-primary" style="flex:1;min-width:160px;font-size:14px;">&#11015;&#65039; Download ID Card</button>'
+    +'<button id="dl-voter-card-btn" class="btn btn-primary" style="flex:1;min-width:160px;font-size:14px;" disabled>&#11015;&#65039; Preparing card…</button>'
     +'<a href="/voter-login" class="btn btn-success" style="flex:1;min-width:160px;font-size:14px;">Login to Vote &#8594;</a>'
     +'</div>'
     +'<div class="alert alert-warning" style="text-align:left;margin:0;font-size:12.5px;">&#9888;&#65039; <strong>Download or screenshot your Voter ID now.</strong> It cannot be recovered if lost.</div>'
     +'</div>';
-  setTimeout(function(){ renderVoterCard(data.voterId, data.name); }, 80);
+  setTimeout(function(){
+    renderVoterCard(data.voterId, data.name);
+    // Enable download button and wire click listener after card is drawn
+    var btn = document.getElementById('dl-voter-card-btn');
+    if (btn) {
+      btn.disabled = false;
+      btn.innerHTML = '&#11015;&#65039; Download ID Card';
+      btn.addEventListener('click', function() { downloadVoterCard(); });
+    }
+  }, 300);
 }
 
 /* ── Draw Voter ID card onto canvas ───────────────────────── */
@@ -1626,12 +1663,35 @@ function _rrCard(ctx, x, y, w, h, r) {
 
 function downloadVoterCard() {
   var cnv = document.getElementById('voter-id-canvas');
-  if (!cnv) return;
-  var link = document.createElement('a');
-  link.download = 'VoterID-' + (_cardData.voterId || 'card') + '.png';
-  link.href = cnv.toDataURL('image/png');
-  link.click();
+  if (!cnv) { alert('Card not ready yet — please wait a moment and try again.'); return; }
+
+  try {
+    var dataUrl = cnv.toDataURL('image/png');
+    if (!dataUrl || dataUrl === 'data:,') { alert('Card image empty — please refresh and try again.'); return; }
+
+    // Must append to DOM for Firefox + Safari + Edge compatibility
+    var link = document.createElement('a');
+    link.download = 'VoterID-' + (_cardData.voterId || 'card') + '.png';
+    link.href = dataUrl;
+    link.style.display = 'none';
+    document.body.appendChild(link);
+    link.click();
+    setTimeout(function() {
+      if (link.parentNode) link.parentNode.removeChild(link);
+    }, 2000);
+  } catch(e) {
+    // Canvas tainted or blocked — open in new tab as fallback
+    try {
+      var w = window.open('', '_blank');
+      if (w) {
+        w.document.write('<!DOCTYPE html><html><head><title>VoterID-' + (_cardData.voterId||'card') + '</title></head><body style="margin:0;background:#000;display:flex;align-items:center;justify-content:center;min-height:100vh;"><img src="' + cnv.toDataURL('image/png') + '" style="max-width:100%;border-radius:12px;"/></body></html>');
+        w.document.close();
+      }
+    } catch(e2) { console.error('Download failed:', e2); }
+  }
 }
+// CRITICAL: expose to window so HTML onclick attributes can reach it (function is inside IIFE)
+window.downloadVoterCard = downloadVoterCard;
 function showDup(data){
   var reasons={phone:'This phone number is already registered.',name_dob:'Same name and date of birth already registered.',face:'Our AI detected your face is already registered.'};
   document.getElementById('s5content').innerHTML=

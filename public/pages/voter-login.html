@@ -8,6 +8,8 @@
 <!-- face-api.js — pure JS face detection, no WASM/eval needed -->
 <script src="https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/dist/face-api.min.js" crossorigin="anonymous"></script>
 <script src="/js/face-engine.js"></script>
+<!-- Tesseract.js — OCR for voter ID card upload -->
+<script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js" crossorigin="anonymous"></script>
 <style>
 /* ── Face auth card — full-bleed camera + body padding ──── */
 .face-auth-card {
@@ -104,17 +106,84 @@
     </div>
     <div class="auth-logo" style="background:linear-gradient(135deg,var(--blue),#3a6fff);box-shadow:0 8px 24px var(--blue-glow);">🗳️</div>
     <h1 class="auth-title">Voter Login</h1>
-    <p class="auth-sub">Enter your Voter ID — then verify your identity with face scan</p>
-    <div id="id-alert"></div>
-    <div class="form-group">
-      <label class="form-label">Voter ID</label>
-      <input id="voter-id-input" class="form-control" type="text"
-        placeholder="VTR-XXXXXX" autocomplete="off" autocorrect="off"
-        autocapitalize="characters" spellcheck="false"
-        style="font-family:'Syne',monospace;font-size:1.1rem;font-weight:700;text-align:center;letter-spacing:0.12em;text-transform:uppercase;"/>
-      <p style="font-size:11.5px;color:var(--text-3);margin-top:7px;text-align:center;">Your Voter ID was shown after registration</p>
+    <p class="auth-sub">Enter your Voter ID or upload your ID card</p>
+
+    <!-- Tab switcher -->
+    <div style="display:flex;gap:0;background:rgba(255,255,255,0.05);border:1px solid var(--border);border-radius:var(--r-md);padding:4px;margin-bottom:20px;">
+      <button id="tab-type-btn"
+        style="flex:1;padding:9px 12px;border:none;border-radius:calc(var(--r-md) - 2px);font-size:13px;font-weight:700;cursor:pointer;transition:all .2s;background:var(--blue);color:#fff;box-shadow:0 2px 8px var(--blue-glow);">
+        ⌨️ Type ID
+      </button>
+      <button id="tab-upload-btn"
+        style="flex:1;padding:9px 12px;border:none;border-radius:calc(var(--r-md) - 2px);font-size:13px;font-weight:700;cursor:pointer;transition:all .2s;background:transparent;color:var(--text-2);">
+        📤 Upload Card
+      </button>
     </div>
-    <button class="btn btn-primary btn-block btn-lg" id="continue-btn">Continue →</button>
+
+    <div id="id-alert"></div>
+
+    <!-- Tab: Type manually -->
+    <div id="tab-type-panel">
+      <div class="form-group">
+        <label class="form-label">Voter ID</label>
+        <input id="voter-id-input" class="form-control" type="text"
+          placeholder="VTR-XXXXXX" autocomplete="off" autocorrect="off"
+          autocapitalize="characters" spellcheck="false"
+          style="font-family:'Syne',monospace;font-size:1.1rem;font-weight:700;text-align:center;letter-spacing:0.12em;text-transform:uppercase;"/>
+        <p style="font-size:11.5px;color:var(--text-3);margin-top:7px;text-align:center;">Your Voter ID was shown after registration</p>
+      </div>
+    </div>
+
+    <!-- Tab: Upload ID card -->
+    <div id="tab-upload-panel" style="display:none;">
+      <!-- Drop zone — using <label> so browsers always open file picker on click -->
+      <label for="card-file-input" id="upload-dropzone"
+        style="display:block;border:2px dashed rgba(79,131,255,0.4);border-radius:var(--r-md);padding:28px 16px;text-align:center;cursor:pointer;transition:all .2s;margin-bottom:14px;position:relative;">
+        <input type="file" id="card-file-input" accept="image/*" style="display:none;"/>
+        <div id="upload-idle">
+          <div style="font-size:2.6rem;margin-bottom:10px;">🪪</div>
+          <div style="font-weight:700;font-size:14px;color:var(--text-1);margin-bottom:4px;">Upload your Voter ID card</div>
+          <div style="font-size:12px;color:var(--text-3);">Tap to choose image · PNG / JPG / WEBP</div>
+        </div>
+        <!-- Preview + scanning state -->
+        <div id="upload-preview" style="display:none;">
+          <img id="card-preview-img" style="max-height:160px;max-width:100%;border-radius:10px;margin-bottom:10px;box-shadow:0 4px 16px rgba(0,0,0,0.4);" alt="ID card preview"/>
+          <div id="ocr-status" style="font-size:12.5px;font-weight:600;color:var(--text-2);margin-top:6px;"></div>
+          <!-- OCR progress bar -->
+          <div id="ocr-prog-wrap" style="display:none;background:rgba(255,255,255,0.07);border-radius:99px;height:4px;margin-top:8px;overflow:hidden;">
+            <div id="ocr-prog-fill" style="height:100%;width:0%;background:linear-gradient(90deg,var(--blue),var(--cyan));border-radius:99px;transition:width .3s;"></div>
+          </div>
+        </div>
+      </label>
+
+      <!-- Detected ID display -->
+      <div id="detected-id-wrap" style="display:none;background:var(--glass-strong);border:1px solid rgba(79,131,255,0.35);border-radius:var(--r-md);padding:14px 16px;margin-bottom:14px;display:none;">
+        <div style="font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--text-3);margin-bottom:6px;">Detected Voter ID</div>
+        <div style="display:flex;align-items:center;gap:10px;">
+          <div id="detected-id-text" style="font-family:'Syne',monospace;font-size:1.3rem;font-weight:800;color:var(--blue);letter-spacing:.12em;flex:1;"></div>
+          <button id="edit-detected-btn" style="background:rgba(79,131,255,0.15);border:1px solid rgba(79,131,255,0.3);border-radius:8px;padding:5px 10px;font-size:11px;color:var(--blue);cursor:pointer;font-weight:700;">✏️ Edit</button>
+        </div>
+      </div>
+
+      <!-- Manual correction field (shown if edit clicked or OCR fails) -->
+      <div id="upload-manual-wrap" style="display:none;">
+        <div class="form-group" style="margin-bottom:10px;">
+          <label class="form-label" style="font-size:12px;">Couldn't read ID? Enter it manually:</label>
+          <input id="upload-manual-input" class="form-control" type="text"
+            placeholder="VTR-XXXXXX" autocomplete="off" autocapitalize="characters" spellcheck="false"
+            style="font-family:'Syne',monospace;font-size:1rem;font-weight:700;text-align:center;letter-spacing:.1em;text-transform:uppercase;"/>
+        </div>
+      </div>
+
+      <div style="text-align:center;">
+        <button id="retry-upload-btn"
+          style="background:none;border:none;color:var(--text-3);font-size:12px;cursor:pointer;text-decoration:underline;display:none;">
+          🔄 Try a different image
+        </button>
+      </div>
+    </div>
+
+    <button class="btn btn-primary btn-block btn-lg" id="continue-btn" style="margin-top:4px;">Continue →</button>
     <div style="text-align:center;margin-top:16px;">
       <a href="/" style="font-size:13px;color:var(--text-3);text-decoration:none;">← Back to Home</a>
     </div>
@@ -194,7 +263,7 @@
           <div class="blink-eye">👁</div>
           <div style="flex:1;">
             <div style="font-weight:700;font-size:13px;color:var(--amber);margin-bottom:4px;">Liveness Check — Blink naturally</div>
-            <div style="font-size:12px;color:var(--text-2);margin-bottom:6px;">Blink <strong id="fv-blinks-needed">2</strong> more time(s) to confirm you're a real person</div>
+            <div style="font-size:12px;color:var(--text-2);margin-bottom:6px;">Blink <strong id="fv-blinks-needed">1</strong> time to confirm you're a real person</div>
             <div class="blink-dots">
               <div class="blink-dot" id="fv-dot-0"></div>
               <div class="blink-dot" id="fv-dot-1"></div>
@@ -348,8 +417,166 @@
   // ══════════════════════════════════════════════════
   // STEP 1 — Look up Voter ID
   // ══════════════════════════════════════════════════
+  // ── Upload tab state ───────────────────────────────
+  var activeTab      = 'type';   // 'type' | 'upload'
+  var detectedVoterId = null;    // ID extracted from uploaded card
+  var ocrRunning     = false;
+
+  function switchTab(tab) {
+    activeTab = tab;
+    var typePanel   = document.getElementById('tab-type-panel');
+    var uploadPanel = document.getElementById('tab-upload-panel');
+    var typeBtn     = document.getElementById('tab-type-btn');
+    var uploadBtn   = document.getElementById('tab-upload-btn');
+
+    if (tab === 'type') {
+      typePanel.style.display   = 'block';
+      uploadPanel.style.display = 'none';
+      typeBtn.style.background  = 'var(--blue)';
+      typeBtn.style.color       = '#fff';
+      typeBtn.style.boxShadow   = '0 2px 8px var(--blue-glow)';
+      uploadBtn.style.background = 'transparent';
+      uploadBtn.style.color      = 'var(--text-2)';
+      uploadBtn.style.boxShadow  = 'none';
+    } else {
+      typePanel.style.display   = 'none';
+      uploadPanel.style.display = 'block';
+      typeBtn.style.background  = 'transparent';
+      typeBtn.style.color       = 'var(--text-2)';
+      typeBtn.style.boxShadow   = 'none';
+      uploadBtn.style.background = 'var(--blue)';
+      uploadBtn.style.color      = '#fff';
+      uploadBtn.style.boxShadow  = '0 2px 8px var(--blue-glow)';
+    }
+    showAlert('id-alert','','');
+  }
+
+  function resetUpload() {
+    detectedVoterId = null; ocrRunning = false;
+    document.getElementById('card-file-input').value = '';
+    document.getElementById('upload-idle').style.display    = 'block';
+    document.getElementById('upload-preview').style.display = 'none';
+    document.getElementById('detected-id-wrap').style.display  = 'none';
+    document.getElementById('upload-manual-wrap').style.display = 'none';
+    document.getElementById('retry-upload-btn').style.display   = 'none';
+    document.getElementById('ocr-prog-wrap').style.display = 'none';
+    document.getElementById('ocr-prog-fill').style.width   = '0%';
+    showAlert('id-alert','','');
+  }
+
+  async function handleCardUpload(file) {
+    if (!file || !file.type.startsWith('image/')) {
+      showAlert('id-alert','danger','⚠️ Please upload an image file (PNG/JPG/WEBP).');
+      return;
+    }
+    if (ocrRunning) return;
+    ocrRunning = true;
+    detectedVoterId = null;
+
+    // Show preview
+    var reader = new FileReader();
+    reader.onload = async function(e) {
+      var img = document.getElementById('card-preview-img');
+      img.src = e.target.result;
+      document.getElementById('upload-idle').style.display    = 'none';
+      document.getElementById('upload-preview').style.display = 'block';
+      document.getElementById('detected-id-wrap').style.display  = 'none';
+      document.getElementById('upload-manual-wrap').style.display = 'none';
+      document.getElementById('retry-upload-btn').style.display   = 'none';
+      document.getElementById('ocr-status').textContent = '🔍 Reading ID card…';
+      document.getElementById('ocr-prog-wrap').style.display = 'block';
+
+      // First try: extract VTR-XXXXXX from the filename
+      var fnMatch = file.name.toUpperCase().match(/VTR-[A-Z0-9]{6}/);
+      if (fnMatch) {
+        ocrDone(fnMatch[0], 'filename');
+        return;
+      }
+
+      // Second: OCR via Tesseract.js
+      try {
+        var worker = await Tesseract.createWorker('eng', 1, {
+          workerPath: 'https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/worker.min.js',
+          corePath:   'https://cdn.jsdelivr.net/npm/tesseract.js-core@5/tesseract-core-simd-lstm.wasm.js',
+          logger: function(m) {
+            if (m.status === 'recognizing text' && typeof m.progress === 'number') {
+              document.getElementById('ocr-prog-fill').style.width = Math.round(m.progress * 100) + '%';
+            }
+            if (m.status) {
+              var labels = {
+                'loading tesseract core': 'Loading OCR engine…',
+                'initializing tesseract': 'Initialising…',
+                'loading language traineddata': 'Loading language data…',
+                'initializing api': 'Starting up…',
+                'recognizing text': 'Scanning text…'
+              };
+              document.getElementById('ocr-status').textContent = '🔍 ' + (labels[m.status] || m.status);
+            }
+          }
+        });
+
+        var result = await worker.recognize(e.target.result);
+        await worker.terminate();
+
+        document.getElementById('ocr-prog-fill').style.width = '100%';
+
+        // Extract VTR-XXXXXX pattern from OCR text
+        var text    = result.data.text.toUpperCase().replace(/\s+/g,' ').replace(/[^A-Z0-9\- ]/g,'');
+        // Try strict: VTR-XXXXXX
+        var match   = text.match(/VTR[\-\s]?([A-Z0-9]{6})/);
+        if (match) {
+          ocrDone('VTR-' + match[1], 'ocr');
+        } else {
+          // Try looser: any 6-char alphanumeric after VTR
+          var loose = text.match(/V[TI][RB][\-\s]?([A-Z0-9]{5,7})/);
+          if (loose) {
+            ocrDone('VTR-' + loose[1].substring(0,6), 'ocr-loose');
+          } else {
+            ocrFailed();
+          }
+        }
+      } catch(err) {
+        console.warn('OCR error:', err);
+        ocrFailed();
+      }
+    };
+    reader.readAsDataURL(file);
+  }
+
+  function ocrDone(voterId, source) {
+    ocrRunning = false;
+    detectedVoterId = voterId.toUpperCase();
+    document.getElementById('ocr-prog-fill').style.width = '100%';
+    document.getElementById('ocr-prog-wrap').style.display = 'none';
+    document.getElementById('ocr-status').textContent = source === 'filename' ? '✅ ID found in filename' : '✅ ID detected from card';
+    document.getElementById('detected-id-text').textContent = detectedVoterId;
+    document.getElementById('detected-id-wrap').style.display  = 'block';
+    document.getElementById('retry-upload-btn').style.display  = 'inline-block';
+    showAlert('id-alert','','');
+  }
+
+  function ocrFailed() {
+    ocrRunning = false;
+    document.getElementById('ocr-prog-wrap').style.display = 'none';
+    document.getElementById('ocr-status').textContent = '⚠️ Could not read ID automatically';
+    document.getElementById('upload-manual-wrap').style.display = 'block';
+    document.getElementById('retry-upload-btn').style.display   = 'inline-block';
+    showAlert('id-alert','warning','⚠️ Could not automatically read the Voter ID from this image. Please enter it manually below.');
+  }
+
+  // ── Get voter ID from whichever tab is active ───────
+  function getActiveVoterId() {
+    if (activeTab === 'type') {
+      return document.getElementById('voter-id-input').value.trim().toUpperCase();
+    }
+    // Upload tab — prefer OCR result, fallback to manual field
+    if (detectedVoterId) return detectedVoterId;
+    var manual = document.getElementById('upload-manual-input');
+    return manual ? manual.value.trim().toUpperCase() : '';
+  }
+
   async function doLookup() {
-    var raw = idInput.value.trim().toUpperCase();
+    var raw = getActiveVoterId();
     if (!raw) { showAlert('id-alert','danger','⚠️ Please enter your Voter ID.'); return; }
     setBtn(continueBtn, true, 'Looking up…');
     showAlert('id-alert','','');
@@ -640,14 +867,14 @@
     fvDetActive  = true;
     fvCapturing  = false;
     fvLivenessOK = false;
-    fvLiveness   = FaceEngine.LivenessDetector(2); // 2 blinks required
+    fvLiveness   = FaceEngine.LivenessDetector(1); // 1 blink required
 
     fvBlinkWrap.style.display   = 'none';
     fvCamHero.className         = 'fv-cam-hero scanning';
     showAlert('fv-cam-alert','','');
     setStatus('🔍 Look straight at camera — keep face centred & chin up', '#fff');
     var _fvLastFrame   = 0;
-    var _FV_FRAME_MS   = 100;
+    var _FV_FRAME_MS   = 50;   // 20fps — catches fast blinks reliably
     var _fvNoFace      = 0;
     var _fvManual      = false;
 
@@ -682,9 +909,14 @@
           FaceEngine.clearOverlay(fvOverlay);
           fvCamHero.className       = 'fv-cam-hero scanning';
           fvBlinkWrap.style.display = 'none';
-          if (_fvNoFace < 15)      setStatus('🔍 Searching — look directly at camera', '#fff');
-          else if (_fvNoFace < 40) setStatus('💡 No face found — better lighting or move closer', '#fff');
-          else                     setStatus('⚠️ Still searching — lift chin, face camera fully', 'var(--amber)');
+          // Reset liveness if face disappears — prevents hand-cover counting as blink
+          if (fvLiveness && _fvNoFace > 3) {
+            fvLiveness.reset();
+            updateBlinkDots(0);
+          }
+          if (_fvNoFace < 15)      setStatus('🔍 Keep face visible — do NOT cover with hands', '#fff');
+          else if (_fvNoFace < 40) setStatus('💡 No face found — better lighting, move closer', '#fff');
+          else                     setStatus('⚠️ Face not detected — lift chin, face camera, no obstructions', 'var(--amber)');
 
         } else if (!fvLivenessOK) {
           /* ── Face found, liveness in progress ── */
@@ -699,8 +931,8 @@
           } else {
             updateBlinkDots(blinks);
             fvBlinkWrap.style.display = 'flex';
-            document.getElementById('fv-blinks-needed').textContent = Math.max(0, 2 - blinks);
-            setStatus('👁  Blink '+ Math.max(0,2-blinks) +' more time'+(2-blinks!==1?'s':'')+' slowly and clearly', 'var(--amber)');
+            document.getElementById('fv-blinks-needed').textContent = Math.max(0, 1 - blinks);
+            setStatus('👁  Blink once naturally — eyes fully open between blinks', 'var(--amber)');
           }
 
           if (fvLiveness.complete()) {
@@ -741,32 +973,50 @@
     fvCapturing = true;
     stopDetection();
     showFacePanel('proc');
-    setProc('Detecting face at capture moment…', 20);
+    setProc('Capturing face…', 15);
 
     try {
-      // Capture the live frame and extract 128-D descriptor for server-side comparison
-      setProc('Capturing face for verification…', 40);
-      var fvVid = document.getElementById('fv-vid');
-      var track = fvStream && fvStream.getVideoTracks()[0];
-      var settings = track ? track.getSettings() : {};
-      var isFront = !(settings.facingMode === 'environment');
-      var capturedFrame = FaceEngine.captureFrame(fvVid, /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent), isFront);
+      var vidEl = document.getElementById('fv-vid');
 
-      setProc('Extracting face features…', 55);
-      // Use detectWithDescriptor for face match — gets 128-D descriptor
-      var snapResult = await FaceEngine.detectWithDescriptor(capturedFrame);
-      var descriptor = snapResult && snapResult.descriptor ? Array.from(snapResult.descriptor) : null;
+      setProc('Scanning face from 3 angles…', 35);
+      // Capture 3 descriptors from live video frames (150ms apart) — server picks best match
+      var descriptors = [];
+      try {
+        descriptors = await FaceEngine.detectMultipleDescriptors(vidEl);
+      } catch(e) {
+        // Fallback: single captureFrame + detectWithDescriptor
+        var track    = fvStream && fvStream.getVideoTracks()[0];
+        var settings = track ? track.getSettings() : {};
+        var isFront  = !(settings.facingMode === 'environment');
+        var frame    = FaceEngine.captureFrame(vidEl, /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent), isFront);
+        var snap     = await FaceEngine.detectWithDescriptor(frame);
+        if (snap && snap.descriptor) descriptors = [Array.from(snap.descriptor)];
+      }
 
-      setProc('Liveness confirmed, verifying identity…', 70);
+      // Also try a single detectWithDescriptor as an extra attempt
+      try {
+        var track2    = fvStream && fvStream.getVideoTracks()[0];
+        var settings2 = track2 ? track2.getSettings() : {};
+        var isFront2  = !(settings2.facingMode === 'environment');
+        var frame2    = FaceEngine.captureFrame(vidEl, /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent), isFront2);
+        var snap2     = await FaceEngine.detectWithDescriptor(frame2);
+        if (snap2 && snap2.descriptor) descriptors.push(Array.from(snap2.descriptor));
+      } catch(e2) {}
+
+      // Use first descriptor as primary (for legacy single-descriptor check)
+      var primaryDescriptor = descriptors.length > 0 ? descriptors[0] : null;
+
+      setProc('Verifying identity…', 70);
       stopCamera(); // camera no longer needed
 
       var res = await fetch('/api/voter/face-verify', { credentials: 'include',
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          voterId:           voterInfo.voterId,
-          livenessConfirmed: true,
-          faceDescriptor:    descriptor   // null for blink_liveness voters, 128-D array for faceapi voters
+          voterId:            voterInfo.voterId,
+          livenessConfirmed:  true,
+          faceDescriptor:     primaryDescriptor,   // primary (legacy compat)
+          faceDescriptors:    descriptors           // all captures — server picks best match
         })
       });
       var data = await res.json();
@@ -821,7 +1071,54 @@
   // ══════════════════════════════════════════════════
   // EVENT LISTENERS (no inline handlers)
   // ══════════════════════════════════════════════════
+  // ── Tab buttons (must use addEventListener — onclick can't reach IIFE scope) ──
+  document.getElementById('tab-type-btn').addEventListener('click', function() { switchTab('type'); });
+  document.getElementById('tab-upload-btn').addEventListener('click', function() { switchTab('upload'); });
+  document.getElementById('retry-upload-btn').addEventListener('click', function() { resetUpload(); });
+
   continueBtn.addEventListener('click', doLookup);
+
+  // ── Upload card file input ──────────────────────────
+  document.getElementById('card-file-input').addEventListener('change', function() {
+    if (this.files && this.files[0]) handleCardUpload(this.files[0]);
+  });
+
+  // Drag-and-drop onto dropzone
+  (function() {
+    var dz = document.getElementById('upload-dropzone');
+    if (!dz) return;
+    dz.addEventListener('dragover', function(e) {
+      e.preventDefault();
+      dz.style.borderColor = 'var(--blue)';
+      dz.style.background  = 'rgba(79,131,255,0.08)';
+    });
+    dz.addEventListener('dragleave', function() {
+      dz.style.borderColor = 'rgba(79,131,255,0.4)';
+      dz.style.background  = '';
+    });
+    dz.addEventListener('drop', function(e) {
+      e.preventDefault();
+      dz.style.borderColor = 'rgba(79,131,255,0.4)';
+      dz.style.background  = '';
+      var file = e.dataTransfer.files[0];
+      if (file) { document.getElementById('card-file-input').files = e.dataTransfer.files; handleCardUpload(file); }
+    });
+  })();
+
+  // Edit button — show manual field alongside detected ID
+  document.getElementById('edit-detected-btn').addEventListener('click', function() {
+    var wrap  = document.getElementById('upload-manual-wrap');
+    var input = document.getElementById('upload-manual-input');
+    wrap.style.display = 'block';
+    input.value = detectedVoterId || '';
+    input.focus(); input.select();
+    // If user types manually, clear OCR result so getActiveVoterId uses this field
+    input.addEventListener('input', function() { detectedVoterId = null; }, { once: true });
+  });
+
+  // CRITICAL: expose onclick-used functions to window (page uses IIFE)
+  window.switchTab   = switchTab;
+  window.resetUpload = resetUpload;
 
   document.getElementById('face-start-btn').addEventListener('click', doStartFace);
   document.getElementById('back-to-id-btn').addEventListener('click', goBackToId);

@@ -134,16 +134,74 @@
   }
 
   /* ─── detectWithDescriptor() — used only at capture ──────────────── */
+  // Tries multiple preprocessings and returns the result with highest detection confidence
   function detectWithDescriptor(input) {
     if (!_faceapi || !_ready) return Promise.reject(new Error('FaceEngine not loaded'));
-    var frame = _preprocessed(input);
-    var chain = _useTiny
-      ? _faceapi.detectSingleFace(frame, _tinyOpts(320, 0.15)).withFaceLandmarks(true).withFaceDescriptor()
-      : _faceapi.detectSingleFace(frame, _ssdOpts(0.20)).withFaceLandmarks().withFaceDescriptor();
-    return chain.then(function (result) {
-      if (!result) return null;
-      return _buildResult(result, input, result.descriptor);
-    });
+
+    // Generate 3 versions of the frame with different brightness levels
+    function _makeFrame(brightnessBoost) {
+      var w = input.videoWidth || input.width || 640;
+      var h = input.videoHeight || input.height || 480;
+      if (!w || !h) return input;
+      var cnv = document.createElement('canvas');
+      cnv.width = w; cnv.height = h;
+      var ctx = cnv.getContext('2d');
+      if (brightnessBoost !== 1) {
+        ctx.filter = 'brightness(' + brightnessBoost + ') contrast(1.2)';
+      }
+      ctx.drawImage(input, 0, 0, w, h);
+      ctx.filter = 'none';
+      return cnv;
+    }
+
+    var frames = [
+      _preprocessed(input),   // adaptive brightness
+      _makeFrame(1.0),         // raw / original
+      _makeFrame(1.8),         // brighter
+    ];
+
+    function tryFrame(i) {
+      if (i >= frames.length) return Promise.resolve(null);
+      var chain = _useTiny
+        ? _faceapi.detectSingleFace(frames[i], _tinyOpts(320, 0.12)).withFaceLandmarks(true).withFaceDescriptor()
+        : _faceapi.detectSingleFace(frames[i], _ssdOpts(0.15)).withFaceLandmarks().withFaceDescriptor();
+      return chain.then(function(result) {
+        if (result && result.descriptor) {
+          return _buildResult(result, input, result.descriptor);
+        }
+        return tryFrame(i + 1); // try next preprocessing
+      });
+    }
+
+    return tryFrame(0);
+  }
+
+  /* ─── detectMultipleDescriptors() — capture 3 frames, return all descriptors ── */
+  function detectMultipleDescriptors(video) {
+    if (!_faceapi || !_ready) return Promise.reject(new Error('FaceEngine not loaded'));
+    var results = [];
+
+    function captureOne(delay) {
+      return new Promise(function(resolve) { setTimeout(resolve, delay); })
+        .then(function() {
+          var frame = _preprocessed(video);
+          var chain = _useTiny
+            ? _faceapi.detectSingleFace(frame, _tinyOpts(320, 0.12)).withFaceLandmarks(true).withFaceDescriptor()
+            : _faceapi.detectSingleFace(frame, _ssdOpts(0.15)).withFaceLandmarks().withFaceDescriptor();
+          return chain;
+        })
+        .then(function(result) {
+          if (result && result.descriptor) {
+            results.push(Array.from(result.descriptor));
+          }
+        });
+    }
+
+    // Capture 3 frames 150ms apart to get varied samples
+    return captureOne(0)
+      .then(function() { return captureOne(150); })
+      .then(function() { return captureOne(300); })
+      .then(function() { return results; });
   }
 
   /* ─── Normalize result ────────────────────────────────────────────── */
@@ -179,16 +237,17 @@
   var R_EYE = [42, 43, 44, 45, 46, 47];
 
   function LivenessDetector(requiredBlinks) {
-    requiredBlinks = requiredBlinks || 2;
+    requiredBlinks = requiredBlinks || 1;  // Only 1 blink needed — fast & user-friendly
 
     var blinkCount   = 0;
     var eyesClosed   = false;
     var closedFrames = 0;
+    var openFrames   = 0;   // frames eyes have been open since last blink
 
     var calibFrames  = 0;
     var earAccum     = 0;
     var baseline     = null;
-    var CALIB_N      = 10;
+    var CALIB_N      = 5;   // Only 5 frames to calibrate (~250ms at 20fps) — much faster
 
     function _d(a, b) {
       var dx = a.x - b.x, dy = a.y - b.y;
@@ -200,35 +259,63 @@
       return den < 1e-6 ? 0.3 : num / den;
     }
 
+    // Real blink = 1–20 frames; hand/obstruction = 30+ frames
+    var MAX_CLOSED_FRAMES = 25;
+
     function update(landmarks) {
       var pos = landmarks.positions;
       if (!pos || pos.length < 48) return blinkCount;
 
-      var ear = (_ear(pos, L_EYE) + _ear(pos, R_EYE)) / 2;
-      if (ear < 0.03 || ear > 0.65) return blinkCount;  // garbage guard
+      var leftEar  = _ear(pos, L_EYE);
+      var rightEar = _ear(pos, R_EYE);
+      var ear = (leftEar + rightEar) / 2;
 
-      // Phase 1 — calibration (accumulate open-eye frames)
-      if (baseline === null) {
-        if (ear > 0.20) { earAccum += ear; calibFrames++; }
-        if (calibFrames >= CALIB_N) {
-          baseline = earAccum / calibFrames;
-          if (baseline < 0.23) baseline = 0.28;   // floor
-          if (baseline > 0.50) baseline = 0.38;   // ceil
+      // Garbage guard
+      if (ear < 0.02 || ear > 0.70) {
+        if (eyesClosed) {
+          closedFrames++;
+          if (closedFrames > MAX_CLOSED_FRAMES) {
+            eyesClosed = false; closedFrames = 0;
+          }
         }
         return blinkCount;
       }
 
-      // Phase 2 — blink detection
-      var closeT = baseline * 0.73;
-      var openT  = baseline * 0.87;
+      // Phase 1 — fast calibration: 5 frames of open eyes
+      if (baseline === null) {
+        if (ear > 0.18) { earAccum += ear; calibFrames++; }
+        if (calibFrames >= CALIB_N) {
+          baseline = earAccum / calibFrames;
+          if (baseline < 0.20) baseline = 0.25;   // floor for narrow eyes
+          if (baseline > 0.55) baseline = 0.42;   // ceil
+        }
+        return blinkCount;
+      }
 
-      if (!eyesClosed && ear < closeT) {
-        eyesClosed = true; closedFrames = 1;
-      } else if (eyesClosed) {
-        if (ear < closeT) {
+      // Phase 2 — blink detection with sensitive thresholds
+      // closeT: 78% of baseline — detects even partial/subtle blinks
+      // openT:  82% of baseline — eyes don't need to fully reopen to register
+      var closeT = baseline * 0.78;
+      var openT  = baseline * 0.82;
+
+      if (!eyesClosed) {
+        openFrames++;
+        if (ear < closeT && openFrames >= 2) {
+          // Eyes just closed (openFrames>=2 prevents double-counting)
+          eyesClosed = true; closedFrames = 1; openFrames = 0;
+        }
+      } else {
+        if (ear < openT) {
           closedFrames++;
-        } else if (ear > openT) {
-          if (closedFrames >= 2) blinkCount++;   // valid blink: closed ≥ 2 frames
+          if (closedFrames > MAX_CLOSED_FRAMES) {
+            // Held too long — obstruction, not a blink
+            eyesClosed = false; closedFrames = 0;
+          }
+        } else {
+          // Eyes reopened — any duration counts (even 1 frame = fast blink)
+          if (closedFrames >= 1 && closedFrames <= MAX_CLOSED_FRAMES) {
+            blinkCount++;
+          }
           eyesClosed = false; closedFrames = 0;
         }
       }
@@ -240,7 +327,7 @@
     function isCalibrated() { return baseline !== null; }
     function getBaseline()  { return baseline; }
     function reset() {
-      blinkCount = 0; eyesClosed = false; closedFrames = 0;
+      blinkCount = 0; eyesClosed = false; closedFrames = 0; openFrames = 0;
       calibFrames = 0; earAccum = 0; baseline = null;
     }
 
@@ -324,7 +411,7 @@
   /* ─── Export ──────────────────────────────────────────────────────── */
   global.FaceEngine = {
     load, isLoaded,
-    detect, detectWithDescriptor,
+    detect, detectWithDescriptor, detectMultipleDescriptors,
     LivenessDetector,
     drawOverlay, clearOverlay, captureFrame
   };

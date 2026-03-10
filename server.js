@@ -51,7 +51,7 @@ if (helmet) {
         imgSrc:     ["'self'","data:","blob:"],
         mediaSrc:   ["'self'","blob:"],
         // face-api.js fetches model weight .bin/.json files from jsdelivr at runtime
-        connectSrc: ["'self'","api.anthropic.com","cdn.jsdelivr.net","raw.githubusercontent.com"],
+        connectSrc: ["'self'","api.anthropic.com","cdn.jsdelivr.net","raw.githubusercontent.com","blob:"],
         frameSrc:   ["'none'"],
         objectSrc:  ["'none'"],
         workerSrc:  ["'self'","blob:"],
@@ -530,7 +530,7 @@ app.post('/api/voter/register', registerLimit, (req,res)=>{
   // faceapi descriptors: euclidean < 0.50 = same person (face-api.js standard)
   // AI descriptors: euclidean < 0.45 = same person
   // Pixel descriptors: normalised 0-1 values, same person ≈ < 0.18 euclidean
-  const FACEAPI_THRESH = 0.50;
+  const FACEAPI_THRESH = 0.55;  // slightly tighter for dup check than login threshold
   const AI_THRESH      = 0.45;
   const PIXEL_THRESH   = 0.18;
 
@@ -604,11 +604,26 @@ app.post('/api/voter/face-verify', apiLimit, (req,res)=>{
     return res.json({success:false, needsReregistration:true,
       message:'Old registration format. Please re-register.'});
 
-  const distance = euclidean(faceDescriptor, voter.faceDescriptor);
-  const THRESHOLD = 0.50;
+  // Accept multiple descriptors — use the best (minimum) distance
+  const descriptors = Array.isArray(req.body.faceDescriptors) && req.body.faceDescriptors.length
+    ? req.body.faceDescriptors
+    : [faceDescriptor];
+
+  let bestDist = 999;
+  for (const desc of descriptors) {
+    if (!Array.isArray(desc) || desc.length !== 128) continue;
+    if (desc.some(v => typeof v !== 'number' || !isFinite(v))) continue;
+    const d = euclidean(desc, voter.faceDescriptor);
+    if (d < bestDist) bestDist = d;
+  }
+  const distance = bestDist;
+
+  // face-api.js same-person: typically 0.3–0.55; strangers: 0.6+
+  // Raised from 0.50 → 0.65 to reduce false rejections in varied lighting
+  const THRESHOLD = 0.65;
   if(distance>=THRESHOLD)
     return res.json({success:false, distance:parseFloat(distance.toFixed(3)),
-      message:'Face does not match registered voter.'});
+      message:'Face does not match. Try better lighting, face the camera directly, and remove glasses if wearing any.'});
 
   req.session.regenerate(err=>{
     if(err) return res.status(500).json({error:'Session error.'});
@@ -697,6 +712,18 @@ app.post('/api/voter/vote', needFaceVerified, apiLimit, (req,res)=>{
 // ══════════════════════════════════════════════════════════════
 // ADMIN
 // ══════════════════════════════════════════════════════════════
+// Check credentials only (no session) — used by admin login step 1 before face verification
+app.post('/api/admin/check-credentials', adminLoginLimit, (req,res)=>{
+  const ip=req.ip,bf=bfCheck(ip);
+  if(bf.locked) return res.status(429).json({error:`Locked. Retry in ${bf.secs}s.`});
+  const uname=sanitize(req.body.username||''),pwd=req.body.password||'';
+  if(!uname||!pwd||pwd.length>200) return res.status(400).json({error:'Credentials required.'});
+  const adm=readJSON(ADMINS_FILE).find(a=>a.username===uname);
+  if(!adm||!bcrypt.compareSync(pwd,adm.password)){bfFail(ip);return res.status(401).json({error:'Invalid username or password.'});}
+  // Don't create session yet — just confirm credentials are valid
+  res.json({success:true,message:'Credentials valid. Complete face verification to login.'});
+});
+
 app.post('/api/admin/login', adminLoginLimit, (req,res)=>{
   const ip=req.ip,bf=bfCheck(ip);
   if(bf.locked) return res.status(429).json({error:`Locked. Retry in ${bf.secs}s.`});
@@ -714,6 +741,20 @@ app.post('/api/admin/login', adminLoginLimit, (req,res)=>{
 
 app.post('/api/admin/logout',(req,res)=>req.session.destroy(()=>res.json({success:true})));
 app.get('/api/admin/me',(req,res)=>res.json({admin:req.session.admin||null}));
+
+app.post('/api/admin/change-password', needAdmin, (req,res)=>{
+  const {currentPassword, newPassword} = req.body;
+  if(!currentPassword||!newPassword) return res.status(400).json({error:'Both current and new password required.'});
+  if(newPassword.length < 8) return res.status(400).json({error:'New password must be at least 8 characters.'});
+  if(newPassword.length > 128) return res.status(400).json({error:'Password too long.'});
+  const admins = readJSON(ADMINS_FILE);
+  const adm = admins.find(a=>a.id===req.session.admin.id);
+  if(!adm) return res.status(404).json({error:'Admin account not found.'});
+  if(!bcrypt.compareSync(currentPassword, adm.password)) return res.status(401).json({error:'Current password is incorrect.'});
+  adm.password = bcrypt.hashSync(newPassword, 12);
+  writeJSON(ADMINS_FILE, admins);
+  res.json({success:true, message:'Password changed successfully.'});
+});
 
 app.get('/api/admin/stats', needAdmin, (req,res)=>{
   const voters=readJSON(VOTERS_FILE),elections=readJSON(ELECTIONS_FILE),votes=readJSON(VOTES_FILE);
