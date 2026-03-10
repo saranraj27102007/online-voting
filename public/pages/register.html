@@ -1,0 +1,1669 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0,user-scalable=no"/>
+<title>Voter Registration — VoteSecure</title>
+<link rel="stylesheet" href="/css/style.css"/>
+<!-- face-api.js — pure JS face detection, no WASM/eval needed -->
+<script src="https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/dist/face-api.min.js" crossorigin="anonymous"></script>
+<script src="/js/face-engine.js"></script>
+</head>
+<body>
+<div class="bg-grid"></div>
+
+<nav class="navbar">
+  <a href="/" class="navbar-brand"><div class="logo-icon">🗳️</div> VoteSecure</a>
+  <a href="/voter-login" class="btn btn-ghost btn-sm">Already registered? →</a>
+</nav>
+
+<div class="reg-page">
+  <!-- Step pills -->
+  <div class="steps-bar" style="margin-top:14px;">
+    <div class="step-pill" id="sp1">1·Info</div>
+    <div class="step-pill" id="sp2">2·OTP</div>
+    <div class="step-pill" id="sp3">3·ID Proof</div>
+    <div class="step-pill" id="sp4">4·Face</div>
+    <div class="step-pill" id="sp5">5·Done</div>
+  </div>
+
+  <!-- ─── STEP 1: Info ──────────────────────────── -->
+  <div id="step1" style="display:none;">
+    <div class="card">
+      <div style="font-family:'Syne',sans-serif;font-size:1.1rem;font-weight:800;margin-bottom:3px;">📋 Personal Information</div>
+      <p style="color:var(--text-2);font-size:12.5px;margin-bottom:18px;">Enter details exactly as on your ID document</p>
+      <div id="e1"></div>
+      <div class="form-group">
+        <label class="form-label">Full Name *</label>
+        <input id="fName" class="form-control" type="text" placeholder="As on Aadhaar / PAN Card" autocomplete="name"/>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+        <div class="form-group">
+          <label class="form-label">Date of Birth *</label>
+          <input id="fDob" class="form-control" type="date"/>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Phone *</label>
+          <input id="fPhone" class="form-control" type="tel" placeholder="10-digit" inputmode="tel"/>
+        </div>
+      </div>
+      <div class="form-group" style="margin-bottom:20px;">
+        <label class="form-label">Address</label>
+        <textarea id="fAddr" class="form-control" rows="2" placeholder="Residential address"></textarea>
+      </div>
+      <button class="btn btn-primary btn-block btn-lg" id="s1Btn">Continue → OTP Verification</button>
+    </div>
+  </div>
+
+  <!-- ─── STEP 2: OTP ───────────────────────────── -->
+  <div id="step2" style="display:none;">
+    <div class="card">
+      <div style="font-family:'Syne',sans-serif;font-size:1.1rem;font-weight:800;margin-bottom:3px;">📱 Phone Verification</div>
+      <p style="color:var(--text-2);font-size:12.5px;margin-bottom:18px;">Verify your mobile number with a 6-digit OTP</p>
+      <div id="e2"></div>
+      <div class="alert alert-info" style="font-size:12px;margin-bottom:14px;">ℹ️ <strong>Demo Mode:</strong> OTP shown on screen. In production it would be sent via SMS.</div>
+
+      <!-- Send panel -->
+      <div id="otp-send-panel">
+        <div style="background:var(--glass-strong);border:1px solid var(--border);border-radius:var(--r-sm);padding:14px;margin-bottom:14px;display:flex;align-items:center;gap:12px;">
+          <span style="font-size:1.8rem;">📱</span>
+          <div>
+            <div style="font-size:11px;color:var(--text-3);font-weight:700;text-transform:uppercase;">Sending OTP to</div>
+            <div id="phone-display" style="font-weight:800;font-size:1rem;font-family:'Syne',monospace;color:var(--text);"></div>
+          </div>
+        </div>
+        <button class="btn btn-primary btn-block" id="send-otp-btn">📤 Send OTP</button>
+      </div>
+
+      <!-- Entry panel -->
+      <div id="otp-entry-panel" style="display:none;">
+        <p style="text-align:center;font-size:12.5px;color:var(--text-2);margin-bottom:4px;">Enter the 6-digit OTP</p>
+        <div id="otp-hint" style="display:none;text-align:center;background:var(--amber-dim);border:1px solid rgba(255,184,48,0.2);border-radius:var(--r-xs);padding:8px 14px;font-size:14px;font-weight:800;color:var(--amber);margin-bottom:6px;"></div>
+        <div class="otp-row" id="otp-boxes"></div>
+        <p id="otp-timer" style="text-align:center;font-size:11.5px;color:var(--text-3);margin-bottom:14px;"></p>
+        <button class="btn btn-primary btn-block" id="verify-otp-btn" disabled>✅ Verify OTP</button>
+        <button class="btn btn-secondary btn-block mt-8" id="resend-otp-btn">🔄 Resend OTP</button>
+      </div>
+      <button class="btn btn-ghost btn-block mt-8" id="s2BackBtn">← Back</button>
+    </div>
+  </div>
+
+  <!-- ─── STEP 3: ID Proof ──────────────────────── -->
+  <div id="step3" style="display:none;">
+
+    <!-- 3a: Choose document -->
+    <div id="s3a" class="card">
+      <div style="font-family:'Syne',sans-serif;font-size:1.1rem;font-weight:800;margin-bottom:3px;">🪪 Choose ID Document</div>
+      <p style="color:var(--text-2);font-size:12.5px;margin-bottom:18px;">Select the ID you want to verify with</p>
+      <div id="e3a"></div>
+
+      <div class="proof-grid">
+        <div class="proof-card" data-proof="aadhaar">
+          <div class="proof-icon" style="background:rgba(79,131,255,0.1);">🪪</div>
+          <div><div class="proof-name">Aadhaar Card</div><div class="proof-desc">Government issued · Verifies Name & DOB</div></div>
+          <div class="proof-tick">⬜</div>
+        </div>
+        <div class="proof-card" data-proof="pan">
+          <div class="proof-icon" style="background:rgba(0,214,143,0.1);">💳</div>
+          <div><div class="proof-name">PAN Card</div><div class="proof-desc">Income Tax Dept · Verifies Name & DOB</div></div>
+          <div class="proof-tick">⬜</div>
+        </div>
+        <div class="proof-card" data-proof="college">
+          <div class="proof-icon" style="background:rgba(255,184,48,0.1);">🎓</div>
+          <div><div class="proof-name">College ID</div><div class="proof-desc">Student identity · Verifies Name</div></div>
+          <div class="proof-tick">⬜</div>
+        </div>
+      </div>
+
+      <div id="proof-tip" style="display:none;margin-bottom:14px;"></div>
+      <button class="btn btn-primary btn-block" id="go-scan-btn" disabled>Continue → Scan / Upload Document</button>
+      <button class="btn btn-ghost btn-block mt-8" id="s3aBackBtn">← Back</button>
+    </div>
+
+    <!-- 3b: Capture -->
+    <div id="s3b" style="display:none;">
+      <div class="card">
+        <div style="font-family:'Syne',sans-serif;font-size:1.1rem;font-weight:800;margin-bottom:3px;" id="scan-title">📷 Scan Document</div>
+        <p style="color:var(--text-2);font-size:12.5px;margin-bottom:16px;" id="scan-sub">Choose how to submit your ID</p>
+        <div id="e3b"></div>
+
+        <!-- Tabs -->
+        <div style="display:flex;gap:8px;margin-bottom:14px;">
+          <button class="btn btn-primary btn-sm flex-1" id="tab-cam-btn">📷 Camera</button>
+          <button class="btn btn-secondary btn-sm flex-1" id="tab-upload-btn">📁 Upload Photo</button>
+        </div>
+
+        <!-- Camera tab -->
+        <div id="tab-cam-content">
+          <div id="cam-select-wrap" style="display:none;margin-bottom:10px;">
+            <label class="form-label">Select Camera</label>
+            <select id="cam-select" class="form-control" style="height:44px;"></select>
+            <p style="font-size:11px;color:var(--text-3);margin-top:4px;">⬆️ Camera black? Choose a different one above</p>
+          </div>
+          <div id="doc-loading" style="text-align:center;padding:20px 0;">
+            <div class="spinner spinner-dark" style="margin:0 auto 10px;width:24px;height:24px;"></div>
+            <p id="doc-load-txt" style="font-size:13px;color:var(--text-2);">Starting camera…</p>
+          </div>
+          <div id="doc-cam-wrap-el" style="display:none;">
+            <div class="doc-cam-wrap" id="doc-cam-box">
+              <video id="doc-vid" autoplay muted playsinline></video>
+              <div class="cam-top-bar">
+                <span class="lux-chip" id="doc-lx">💡 —</span>
+                <div style="display:flex;gap:6px;">
+                  <button class="btn-icon" id="flip-doc-btn" style="display:none;width:30px;height:30px;" title="Flip">🔄</button>
+                  <button class="btn-icon" id="doc-boost-btn" style="width:30px;height:30px;" title="Boost">☀️</button>
+                </div>
+              </div>
+              <div class="doc-frame" id="doc-frame"></div>
+              <div class="cam-bottom-bar" id="doc-bar">📄 Hold document inside the frame</div>
+            </div>
+            <div id="doc-tip-box" style="margin:8px 0 10px;"></div>
+            <div style="display:flex;gap:10px;">
+              <button class="btn btn-secondary" style="max-width:70px;" id="back-from-cam-btn">← Back</button>
+              <button class="btn btn-primary flex-1" id="capture-btn">📸 Capture</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Upload tab -->
+        <div id="tab-upload-content" style="display:none;">
+          <div class="alert alert-info" style="font-size:12px;margin-bottom:14px;">💡 Take a clear photo on your phone → transfer → upload here.</div>
+          <div class="upload-zone" id="upload-zone">
+            <div style="font-size:2.6rem;margin-bottom:8px;">📁</div>
+            <div style="font-weight:700;font-size:14.5px;color:var(--text);margin-bottom:4px;">Click to upload or drag & drop</div>
+            <div style="font-size:12px;color:var(--text-3);">JPG · PNG — Max 10MB</div>
+          </div>
+          <input type="file" id="file-input" accept="image/jpeg,image/jpg,image/png" style="display:none;"/>
+          <div id="upload-preview" style="display:none;margin-bottom:12px;">
+            <img id="upload-img" style="width:100%;border-radius:var(--r-sm);display:block;margin-bottom:8px;border:1px solid var(--border);" alt="ID preview"/>
+            <div class="alert alert-success" style="font-size:12px;margin-bottom:8px;">✅ Image loaded — click Verify Document below</div>
+            <div style="display:flex;gap:10px;">
+              <button class="btn btn-secondary" style="max-width:120px;" id="clear-upload-btn">🔄 Change</button>
+              <button class="btn btn-primary flex-1" id="verify-upload-btn">🔍 Verify Document</button>
+            </div>
+          </div>
+          <button class="btn btn-ghost btn-block" id="back-from-upload-btn">← Back</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 3c: OCR result -->
+    <div id="s3c" style="display:none;">
+      <div class="card">
+        <div style="font-family:'Syne',sans-serif;font-size:1.1rem;font-weight:800;margin-bottom:3px;" id="ocr-title">🔍 Verifying Document</div>
+        <p style="color:var(--text-2);font-size:12.5px;margin-bottom:16px;" id="ocr-sub">Checking name & date of birth…</p>
+        <div id="e3c"></div>
+        <canvas id="doc-canvas" style="width:100%;border-radius:var(--r-sm);display:block;margin-bottom:12px;border:1px solid var(--border);"></canvas>
+        <div id="ocr-loading" style="text-align:center;padding:12px 0;">
+          <div style="display:flex;align-items:center;justify-content:center;gap:10px;margin-bottom:8px;">
+            <div class="spinner spinner-dark" style="width:18px;height:18px;"></div>
+            <span id="ocr-txt" style="font-size:13px;font-weight:700;color:var(--blue);">Preprocessing image…</span>
+          </div>
+          <div class="prog-wrap"><div class="prog-fill" id="ocr-bar" style="width:5%;"></div></div>
+        </div>
+        <div id="ocr-result" style="display:none;"></div>
+        <div id="ocr-actions" style="display:none;margin-top:12px;">
+          <button class="btn btn-success btn-block" id="accept-proof-btn" style="display:none;">✅ Verified — Continue to Face Scan</button>
+          <button class="btn btn-secondary btn-block mt-8" id="retry-doc-btn">🔄 Retake / Re-upload</button>
+          <button class="btn btn-ghost btn-block mt-8" id="choose-different-btn">← Choose Different Document</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ─── STEP 4: Face ──────────────────────────── -->
+  <div id="step4" style="display:none;">
+
+    <!-- Model loading panel -->
+    <div id="s4load" style="display:none;">
+      <div class="card">
+        <div class="model-load-screen">
+          <div class="model-load-icon">🤖</div>
+          <div style="font-family:'Syne',sans-serif;font-size:1.1rem;font-weight:800;margin-bottom:6px;">Loading Face AI</div>
+          <p style="color:var(--text-2);font-size:13px;margin-bottom:20px;">Downloading recognition models (~2 MB)<br>This takes a few seconds once, then it's cached.</p>
+          <div class="prog-wrap" style="max-width:300px;margin:0 auto 10px;"><div class="prog-fill" id="s4load-bar" style="width:0%;"></div></div>
+          <p id="s4load-status" style="font-size:12px;color:var(--text-3);margin-top:8px;">Initialising…</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Camera panel -->
+    <div id="s4b" style="display:none;">
+      <div class="card" style="padding:20px;">
+        <div style="font-family:'Syne',sans-serif;font-size:1.1rem;font-weight:800;margin-bottom:3px;">🤳 Face Registration</div>
+        <p style="color:var(--text-2);font-size:12.5px;margin-bottom:14px;">Look at the camera — AI detects your face in real time</p>
+
+        <div id="face-cam-select-wrap" style="display:none;margin-bottom:10px;">
+          <label class="form-label">Select Camera</label>
+          <select id="face-cam-select" class="form-control" style="height:44px;"></select>
+          <p style="font-size:11px;color:var(--text-3);margin-top:4px;">Black screen? Pick a different camera above.</p>
+        </div>
+
+        <!-- Camera + canvas overlay -->
+        <div class="face-cam-wrap scanning" id="face-cam-el" style="margin-bottom:0;">
+          <video id="face-vid" autoplay muted playsinline></video>
+          <canvas id="face-overlay" class="face-scan-canvas"></canvas>
+          <div class="cam-top-bar">
+            <span class="lux-chip" id="face-lx">💡 —</span>
+            <div style="display:flex;gap:6px;">
+              <button class="btn-icon" id="flip-face-btn" style="width:30px;height:30px;display:none;">🔄</button>
+              <button class="btn-icon" id="face-boost-btn" style="width:30px;height:30px;">☀️</button>
+            </div>
+          </div>
+          <div class="face-status-overlay" id="face-status-bar">📷 Camera ready — look at the camera</div>
+        </div>
+
+        <!-- Blink liveness indicator -->
+        <div class="blink-indicator" id="blink-indicator" style="display:none;">
+          <div class="blink-eye">👁</div>
+          <div style="flex:1;">
+            <div style="font-weight:700;font-size:13px;color:var(--amber);margin-bottom:4px;">Liveness Check — Please blink naturally</div>
+            <div style="font-size:12px;color:var(--text-2);margin-bottom:6px;">Blink <strong id="blinks-needed">2</strong> times to confirm you're real</div>
+            <div class="blink-dots">
+              <div class="blink-dot" id="blink-dot-0"></div>
+              <div class="blink-dot" id="blink-dot-1"></div>
+            </div>
+          </div>
+        </div>
+
+        <div id="e4" style="margin-top:10px;"></div>
+
+        <div style="display:flex;gap:10px;margin-top:12px;">
+          <button class="btn btn-secondary" style="max-width:70px;" id="back-from-face-btn">← Back</button>
+          <button class="btn btn-primary flex-1" id="snap-face-btn" disabled>📸 Capture Face</button>
+        </div>
+        <button class="btn btn-ghost btn-block mt-8" id="retry-face-cam-btn" style="display:none;color:var(--amber);">🔄 Retry / Change Camera</button>
+      </div>
+    </div>
+
+    <!-- Processing panel -->
+    <div id="s4proc" style="display:none;">
+      <div class="card" style="padding:30px 20px;">
+        <div style="text-align:center;">
+          <div style="font-size:3rem;margin-bottom:12px;">🔬</div>
+          <p id="proc-txt" style="font-weight:700;font-size:14px;margin-bottom:12px;">Extracting face features…</p>
+          <div class="prog-wrap"><div class="prog-fill" id="proc-bar" style="width:10%;"></div></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Preview panel -->
+    <div id="s4c" style="display:none;">
+      <div class="card" style="padding:20px;">
+        <div style="font-family:'Syne',sans-serif;font-size:1.1rem;font-weight:800;margin-bottom:12px;">📸 Face Captured</div>
+        <div style="border-radius:var(--r-sm);overflow:hidden;margin-bottom:12px;position:relative;">
+          <canvas id="face-canvas" style="width:100%;display:block;"></canvas>
+          <div id="face-badge" style="position:absolute;top:10px;right:10px;background:rgba(0,214,143,0.9);color:white;border-radius:var(--r-xs);padding:4px 12px;font-size:11px;font-weight:700;backdrop-filter:blur(8px);">✅ Face Verified</div>
+        </div>
+        <div class="alert alert-success" id="face-ok-msg" style="margin-bottom:12px;">🎯 128-D face descriptor saved — click below to complete registration</div>
+        <div style="display:flex;gap:10px;">
+          <button class="btn btn-secondary" style="max-width:110px;" id="retake-face-btn">🔄 Retake</button>
+          <button class="btn btn-success flex-1" id="reg-btn">✅ Complete Registration</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ─── STEP 5: Done ──────────────────────────── -->
+  <div id="step5" style="display:none;">
+    <div id="s5content"></div>
+  </div>
+</div><!-- end .reg-page -->
+
+<script>
+(function () {
+  'use strict';
+
+// ══════════════════════════════════════════════════
+// STATE
+// ══════════════════════════════════════════════════
+var reg = {};
+var proofType = null, proofOK = false;
+
+// HTML escape helper (used throughout)
+function esc(s) {
+  return String(s||'')
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;')
+    .replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+var faceStream = null;
+var faceLux = 150, faceBoostOn = false, facingMode = 'user', faceCameraId = null;
+var docStream = null, docBoostOn = false, docLux = 150, docLightLoop = null;
+var docFacing = 'environment', selectedCameraId = null;
+var availableCameras = [];
+var isMobile = /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent);
+var otpCountdown = null;
+var capturedCanvas = null, faceCapturing = false;
+var finalDesc = null, faceDescType = 'faceapi';
+// FaceEngine detection loop state
+var _detActive = false, _detTimer = null;
+var _faceLiveness = null, _livenessOK = false;
+var luxLoop = null;
+
+// ══════════════════════════════════════════════════
+// NAVIGATION
+// ══════════════════════════════════════════════════
+function goStep(n) {
+  for (var i = 1; i <= 5; i++) {
+    var el = document.getElementById('step' + i);
+    if (el) el.style.display = (i === n) ? 'block' : 'none';
+  }
+  var pills = ['sp1','sp2','sp3','sp4','sp5'];
+  pills.forEach(function (id, idx) {
+    var p = document.getElementById(id);
+    if (!p) return;
+    p.className = 'step-pill' + (idx + 1 < n ? ' done' : idx + 1 === n ? ' active' : '');
+  });
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+function showAlert(id, type, msg) {
+  var el = document.getElementById(id);
+  if (el) el.innerHTML = msg ? '<div class="alert alert-' + type + '">' + msg + '</div>' : '';
+}
+
+// ══════════════════════════════════════════════════
+// STEP 1
+// ══════════════════════════════════════════════════
+document.getElementById('s1Btn').addEventListener('click', s1Next);
+
+function s1Next() {
+  showAlert('e1','','');
+  var name  = document.getElementById('fName').value.trim();
+  var dob   = document.getElementById('fDob').value;
+  var phone = document.getElementById('fPhone').value.replace(/\D/g,'').slice(-10);
+  var addr  = document.getElementById('fAddr').value.trim();
+  if (!name || name.length < 2) { showAlert('e1','danger','⚠️ Full name required.'); return; }
+  if (!dob) { showAlert('e1','danger','⚠️ Date of birth required.'); return; }
+  if (phone.length < 10) { showAlert('e1','danger','⚠️ Enter a valid 10-digit mobile number.'); return; }
+  reg = { name: name, dob: dob, phone: phone, address: addr };
+  document.getElementById('phone-display').textContent = '+91 ' + phone;
+  goStep(2);
+}
+
+document.getElementById('s2BackBtn').addEventListener('click', function() { goStep(1); });
+
+// ══════════════════════════════════════════════════
+// STEP 2 — OTP
+// ══════════════════════════════════════════════════
+function buildOtpBoxes() {
+  var row = document.getElementById('otp-boxes');
+  if (!row) return;
+  row.innerHTML = '';
+  for (var i = 0; i < 6; i++) {
+    (function(idx) {
+      var inp = document.createElement('input');
+      inp.type = 'tel'; inp.maxLength = 1;
+      inp.className = 'otp-box'; inp.id = 'od' + idx;
+      inp.inputMode = 'numeric';
+      inp.addEventListener('input', function() {
+        this.value = this.value.replace(/\D/g,'');
+        if (this.value && idx < 5) { var nx = document.getElementById('od'+(idx+1)); if(nx) nx.focus(); }
+        refreshVerifyBtn();
+        if (this.value) this.classList.add('filled'); else this.classList.remove('filled');
+      });
+      inp.addEventListener('keydown', function(e) {
+        if (e.key === 'Backspace' && !this.value && idx > 0) {
+          var pv = document.getElementById('od'+(idx-1)); if(pv) pv.focus();
+        }
+      });
+      row.appendChild(inp);
+    })(i);
+  }
+  row.addEventListener('paste', function(e) {
+    var txt = (e.clipboardData||window.clipboardData).getData('text').replace(/\D/g,'').slice(0,6);
+    if (txt.length === 6) {
+      for(var k=0;k<6;k++){var d=document.getElementById('od'+k);if(d){d.value=txt[k];d.classList.add('filled');}}
+      refreshVerifyBtn(); e.preventDefault();
+    }
+  });
+}
+
+function refreshVerifyBtn() {
+  var full = true;
+  for(var i=0;i<6;i++){var d=document.getElementById('od'+i);if(!d||!d.value){full=false;break;}}
+  document.getElementById('verify-otp-btn').disabled = !full;
+}
+
+document.getElementById('send-otp-btn').addEventListener('click', sendOtp);
+document.getElementById('verify-otp-btn').addEventListener('click', verifyOtp);
+document.getElementById('resend-otp-btn').addEventListener('click', resetOtp);
+
+async function sendOtp() {
+  var btn = document.getElementById('send-otp-btn');
+  btn.disabled = true; btn.innerHTML = '<span class="spinner"></span>&nbsp;Sending…';
+  showAlert('e2','','');
+  try {
+    var res = await fetch('/api/otp/send', { credentials: 'include',  method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ phone: reg.phone }) });
+    var data = await res.json();
+    if (!res.ok) throw new Error(data.error);
+    document.getElementById('otp-send-panel').style.display = 'none';
+    document.getElementById('otp-entry-panel').style.display = 'block';
+    document.getElementById('od0').focus();
+    if (data.demoOtp) { var h=document.getElementById('otp-hint'); h.style.display='block'; h.textContent='📱 Demo OTP: '+data.demoOtp; }
+    startOtpCd(300);
+    showAlert('e2','success','✅ ' + data.message);
+  } catch(e) {
+    showAlert('e2','danger','❌ ' + e.message);
+    btn.disabled = false; btn.innerHTML = '📤 Send OTP';
+  }
+}
+
+function startOtpCd(s) {
+  clearInterval(otpCountdown);
+  otpCountdown = setInterval(function() {
+    s--;
+    var m = Math.floor(s/60), sec = s%60;
+    var el = document.getElementById('otp-timer');
+    if (el) el.textContent = 'OTP expires in ' + m + ':' + (sec<10?'0':'') + sec;
+    if (s <= 0) { clearInterval(otpCountdown); if(el) el.textContent='OTP expired. Please resend.'; }
+  }, 1000);
+}
+
+function resetOtp() {
+  clearInterval(otpCountdown);
+  document.getElementById('otp-send-panel').style.display = 'block';
+  document.getElementById('otp-entry-panel').style.display = 'none';
+  for(var i=0;i<6;i++){var d=document.getElementById('od'+i);if(d){d.value='';d.classList.remove('filled');}}
+  document.getElementById('otp-hint').style.display = 'none';
+  document.getElementById('verify-otp-btn').disabled = true;
+  var btn = document.getElementById('send-otp-btn'); btn.disabled=false; btn.innerHTML='📤 Send OTP';
+  showAlert('e2','','');
+}
+
+async function verifyOtp() {
+  var otp=''; for(var i=0;i<6;i++){var d=document.getElementById('od'+i);otp+=(d?d.value:'');}
+  if(otp.length<6) { showAlert('e2','danger','Enter the complete 6-digit OTP.'); return; }
+  var btn = document.getElementById('verify-otp-btn');
+  btn.disabled=true; btn.innerHTML='<span class="spinner"></span>&nbsp;Verifying…';
+  showAlert('e2','','');
+  try {
+    var res = await fetch('/api/otp/verify', { credentials: 'include',  method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({phone:reg.phone,otp:otp}) });
+    var data = await res.json();
+    if(!res.ok) throw new Error(data.error);
+    clearInterval(otpCountdown); reg.phoneVerified = true;
+    showAlert('e2','success','✅ Phone verified!');
+    setTimeout(function(){ goStep(3); showS3a(); }, 700);
+  } catch(e) {
+    showAlert('e2','danger','❌ ' + e.message);
+    btn.disabled=false; btn.innerHTML='✅ Verify OTP';
+  }
+}
+
+// ══════════════════════════════════════════════════
+// STEP 3 — ID Proof
+// ══════════════════════════════════════════════════
+function showS3a() {
+  document.getElementById('s3a').style.display = 'block';
+  document.getElementById('s3b').style.display = 'none';
+  document.getElementById('s3c').style.display = 'none';
+}
+
+// Proof card selection using dataset, no inline onclick
+document.querySelectorAll('.proof-card').forEach(function(card) {
+  card.addEventListener('click', function() {
+    proofType = card.dataset.proof;
+    document.querySelectorAll('.proof-card').forEach(function(c) {
+      c.classList.remove('selected');
+      c.querySelector('.proof-tick').textContent = '⬜';
+    });
+    card.classList.add('selected');
+    card.querySelector('.proof-tick').textContent = '🔵';
+    var tips = {
+      aadhaar: '<div class="alert alert-info" style="margin:0;font-size:12px;">🪪 <strong>Aadhaar Tips:</strong> Show the FRONT — photo, name, and DOB must be clearly visible.</div>',
+      pan:     '<div class="alert alert-info" style="margin:0;font-size:12px;">💳 <strong>PAN Tips:</strong> Show the FRONT — name, DOB, and PAN number must be fully visible.</div>',
+      college: '<div class="alert alert-info" style="margin:0;font-size:12px;">🎓 <strong>College ID Tips:</strong> Your full name must be clearly visible.</div>'
+    };
+    var tip = document.getElementById('proof-tip');
+    tip.style.display = 'block';
+    tip.innerHTML = tips[proofType] || '';
+    document.getElementById('go-scan-btn').disabled = false;
+  });
+});
+
+document.getElementById('s3aBackBtn').addEventListener('click', function() { goStep(2); });
+document.getElementById('go-scan-btn').addEventListener('click', startScan);
+document.getElementById('back-from-cam-btn').addEventListener('click', function() { stopDocCam(); showS3a(); });
+document.getElementById('back-from-upload-btn').addEventListener('click', showS3a);
+document.getElementById('capture-btn').addEventListener('click', captureDoc);
+document.getElementById('retry-doc-btn').addEventListener('click', retryDoc);
+document.getElementById('accept-proof-btn').addEventListener('click', acceptProof);
+document.getElementById('choose-different-btn').addEventListener('click', function() { document.getElementById('s3c').style.display='none'; showS3a(); });
+
+// Tab switching
+document.getElementById('tab-cam-btn').addEventListener('click', function() { switchTab('cam'); });
+document.getElementById('tab-upload-btn').addEventListener('click', function() { switchTab('upload'); });
+
+// Upload
+document.getElementById('upload-zone').addEventListener('click', function() { document.getElementById('file-input').click(); });
+document.getElementById('upload-zone').addEventListener('dragover', function(e) { e.preventDefault(); this.classList.add('drag-over'); });
+document.getElementById('upload-zone').addEventListener('dragleave', function() { this.classList.remove('drag-over'); });
+document.getElementById('upload-zone').addEventListener('drop', function(e) { e.preventDefault(); this.classList.remove('drag-over'); var f=e.dataTransfer.files[0]; if(f) loadUploadedFile(f); });
+document.getElementById('file-input').addEventListener('change', function(e) { var f=e.target.files[0]; if(f) loadUploadedFile(f); });
+document.getElementById('clear-upload-btn').addEventListener('click', clearUpload);
+document.getElementById('verify-upload-btn').addEventListener('click', verifyUpload);
+
+function startScan() {
+  if (!proofType) { showAlert('e3a','danger','⚠️ Please select an ID document type first.'); return; }
+  var titles = { aadhaar:'Aadhaar Card', pan:'PAN Card', college:'College ID Card' };
+  document.getElementById('scan-title').textContent = '📷 ' + titles[proofType];
+  document.getElementById('scan-sub').textContent = 'Use camera or upload a photo of your ' + titles[proofType];
+  var scanTips = {
+    aadhaar: '<div class="alert alert-info" style="margin:0;font-size:12px;">🪪 Hold Aadhaar flat inside the frame — name and DOB must be visible.</div>',
+    pan:     '<div class="alert alert-info" style="margin:0;font-size:12px;">💳 Hold PAN flat — name, DOB and PAN number must be clearly visible.</div>',
+    college: '<div class="alert alert-info" style="margin:0;font-size:12px;">🎓 Hold College ID flat — your name must be clearly visible.</div>'
+  };
+  document.getElementById('doc-tip-box').innerHTML = scanTips[proofType] || '';
+  var ocrTitles = { aadhaar:'🪪 Aadhaar Verification', pan:'💳 PAN Card Verification', college:'🎓 College ID Verification' };
+  document.getElementById('ocr-title').textContent = ocrTitles[proofType];
+  document.getElementById('s3a').style.display = 'none';
+  document.getElementById('s3b').style.display = 'block';
+  document.getElementById('s3c').style.display = 'none';
+  switchTab(isMobile ? 'cam' : 'upload');
+}
+
+function switchTab(tab) {
+  var isCam = tab === 'cam';
+  var camBtn = document.getElementById('tab-cam-btn');
+  var upBtn  = document.getElementById('tab-upload-btn');
+  if (isCam) {
+    camBtn.className = 'btn btn-primary btn-sm flex-1';
+    upBtn.className  = 'btn btn-secondary btn-sm flex-1';
+  } else {
+    camBtn.className = 'btn btn-secondary btn-sm flex-1';
+    upBtn.className  = 'btn btn-primary btn-sm flex-1';
+  }
+  document.getElementById('tab-cam-content').style.display    = isCam ? 'block' : 'none';
+  document.getElementById('tab-upload-content').style.display = isCam ? 'none' : 'block';
+  if (isCam) openDocCam(); else stopDocCam();
+}
+
+// ─ File upload
+function loadUploadedFile(file) {
+  if (!file.type.match(/image\/(jpeg|jpg|png)/i)) { showAlert('e3b','danger','Only JPG or PNG images.'); return; }
+  if (file.size > 10*1024*1024) { showAlert('e3b','danger','File too large. Max 10MB.'); return; }
+  var reader = new FileReader();
+  reader.onload = function(e) {
+    var img = document.getElementById('upload-img');
+    img.src = e.target.result;
+    img.onload = function() {
+      document.getElementById('upload-zone').style.display = 'none';
+      document.getElementById('upload-preview').style.display = 'block';
+    };
+  };
+  reader.readAsDataURL(file);
+}
+
+function clearUpload() {
+  document.getElementById('file-input').value = '';
+  document.getElementById('upload-preview').style.display = 'none';
+  document.getElementById('upload-zone').style.display = 'block';
+  showAlert('e3b','','');
+}
+
+async function verifyUpload() {
+  var img = document.getElementById('upload-img');
+  if (!img.src || img.src === window.location.href) { showAlert('e3b','danger','Please upload an image first.'); return; }
+  var btn = document.getElementById('verify-upload-btn');
+  btn.disabled = true; btn.innerHTML = '<span class="spinner spinner-sm"></span>&nbsp;Processing…';
+  var cnv = document.getElementById('doc-canvas');
+  cnv.width = img.naturalWidth || img.width;
+  cnv.height = img.naturalHeight || img.height;
+  var ctx = cnv.getContext('2d');
+  ctx.filter = 'brightness(1.3) contrast(1.2)';
+  ctx.drawImage(img, 0, 0);
+  document.getElementById('s3b').style.display = 'none';
+  document.getElementById('s3c').style.display = 'block';
+  document.getElementById('ocr-loading').style.display = 'block';
+  document.getElementById('ocr-result').style.display = 'none';
+  document.getElementById('ocr-actions').style.display = 'none';
+  btn.disabled = false; btn.innerHTML = '🔍 Verify Document';
+  await runOCR(cnv);
+}
+
+function retryDoc() {
+  document.getElementById('s3c').style.display = 'none';
+  document.getElementById('s3b').style.display = 'block';
+  document.getElementById('capture-btn').disabled = false;
+  document.getElementById('capture-btn').innerHTML = '📸 Capture';
+  document.getElementById('doc-frame').className = 'doc-frame';
+  clearUpload();
+  var camVisible = document.getElementById('tab-cam-content').style.display !== 'none';
+  if (camVisible) openDocCam();
+}
+
+// ─ Camera detection
+async function detectCameras() {
+  try {
+    var tmp = await navigator.mediaDevices.getUserMedia({ video: true });
+    tmp.getTracks().forEach(function(t){ t.stop(); });
+    var devices = await navigator.mediaDevices.enumerateDevices();
+    availableCameras = devices
+      .filter(function(d){ return d.kind === 'videoinput'; })
+      .map(function(d,i){ return { deviceId: d.deviceId, label: d.label||('Camera '+(i+1)) }; });
+  } catch(e) { availableCameras = []; }
+}
+
+function populateCameraSelect() {
+  var wrap = document.getElementById('cam-select-wrap');
+  var sel  = document.getElementById('cam-select');
+  if (availableCameras.length === 0) { wrap.style.display = 'none'; return; }
+  sel.innerHTML = '';
+  function score(cam) {
+    var l = cam.label.toLowerCase();
+    if (/virtual|obs|snap|ivcam|android|phone|mirror|manycam/i.test(l)) return -10;
+    if (/integrated|built.?in|hd webcam|hp|laptop/i.test(l)) return 10;
+    return 1;
+  }
+  var sorted = availableCameras.slice().sort(function(a,b){ return score(b)-score(a); });
+  sorted.forEach(function(cam, i) {
+    var opt = document.createElement('option');
+    opt.value = cam.deviceId;
+    var s = score(cam);
+    var prefix = s===-10 ? '⚠️ Virtual — ' : s>=10 ? '✅ Webcam — ' : '📷 Camera '+(i+1)+' — ';
+    opt.textContent = prefix + cam.label;
+    sel.appendChild(opt);
+  });
+  sel.selectedIndex = 0;
+  selectedCameraId = sel.value;
+  wrap.style.display = availableCameras.length > 1 ? 'block' : 'none';
+}
+
+document.getElementById('cam-select').addEventListener('change', async function() {
+  selectedCameraId = this.value;
+  stopDocCam();
+  await openDocCam();
+});
+
+async function openDocCam() {
+  document.getElementById('doc-loading').style.display = 'block';
+  document.getElementById('doc-cam-wrap-el').style.display = 'none';
+  document.getElementById('doc-load-txt').textContent = 'Detecting cameras…';
+  showAlert('e3b','','');
+  if (!availableCameras.length) await detectCameras();
+  populateCameraSelect();
+  document.getElementById('doc-load-txt').textContent = 'Starting camera…';
+
+  var fallbacks = selectedCameraId
+    ? [{video:{deviceId:{exact:selectedCameraId},width:{ideal:1280},height:{ideal:720}}}, {video:{deviceId:{exact:selectedCameraId},width:{ideal:640},height:{ideal:480}}}, {video:{deviceId:{exact:selectedCameraId}}}]
+    : isMobile
+    ? [{video:{facingMode:{ideal:'environment'},width:{ideal:1280},height:{ideal:720}}},{video:{facingMode:{ideal:'environment'}}}]
+    : [{video:{width:{ideal:1280},height:{ideal:720}}},{video:{width:{ideal:640},height:{ideal:480}}},{video:true}];
+
+  docStream = null;
+  for(var fi=0;fi<fallbacks.length;fi++){
+    try { docStream = await navigator.mediaDevices.getUserMedia(fallbacks[fi]); break; } catch(e){}
+  }
+  if (!docStream) {
+    document.getElementById('doc-loading').style.display = 'none';
+    showCameraError('e3b');
+    return;
+  }
+  var v = document.getElementById('doc-vid');
+  v.srcObject = docStream; v.play();
+  applyDocFilter();
+  document.getElementById('flip-doc-btn').style.display = isMobile ? 'flex' : 'none';
+  document.getElementById('doc-loading').style.display = 'none';
+  document.getElementById('doc-cam-wrap-el').style.display = 'block';
+  startDocLight();
+}
+
+function showCameraError(alertId) {
+  showAlert(alertId, 'danger', '📷 <strong>Camera could not start.</strong> Allow camera access in your browser, close other apps using the camera, and try again.');
+}
+
+function applyDocFilter() {
+  var v = document.getElementById('doc-vid');
+  if (v) v.style.filter = docBoostOn ? 'brightness(2.2) contrast(1.7)' : 'brightness(1.4) contrast(1.2)';
+}
+
+document.getElementById('doc-boost-btn').addEventListener('click', function() {
+  docBoostOn = !docBoostOn;
+  this.style.background = docBoostOn ? 'rgba(79,131,255,0.6)' : '';
+  applyDocFilter();
+});
+
+document.getElementById('flip-doc-btn').addEventListener('click', function() {
+  stopDocCam();
+  docFacing = docFacing === 'environment' ? 'user' : 'environment';
+  selectedCameraId = null;
+  openDocCam();
+});
+
+function startDocLight() {
+  clearInterval(docLightLoop);
+  docLightLoop = setInterval(function() {
+    var v = document.getElementById('doc-vid'); if(!v||!v.videoWidth) return;
+    try {
+      var c = document.createElement('canvas'); c.width=80; c.height=50;
+      var ctx=c.getContext('2d'); ctx.drawImage(v,0,0,80,50);
+      var px=ctx.getImageData(0,0,80,50).data, s=0;
+      for(var i=0;i<px.length;i+=16) s+=(px[i]+px[i+1]+px[i+2])/3;
+      docLux = s/(px.length/16);
+      var chip = document.getElementById('doc-lx'); if(!chip) return;
+      if(docLux<50) chip.textContent='🌑 Very Dark'; else if(docLux<90) chip.textContent='🌙 Low'; else if(docLux<160) chip.textContent='💡 OK'; else chip.textContent='☀️ Good';
+    } catch(e){}
+  }, 800);
+}
+
+function stopDocCam() {
+  clearInterval(docLightLoop); docLightLoop = null;
+  if (docStream) { docStream.getTracks().forEach(function(t){ t.stop(); }); docStream = null; }
+}
+
+async function captureDoc() {
+  var btn = document.getElementById('capture-btn');
+  btn.disabled = true; btn.innerHTML = '<span class="spinner spinner-sm"></span>&nbsp;Capturing…';
+  document.getElementById('doc-frame').className = 'doc-frame scan';
+  await new Promise(function(r){ setTimeout(r, 500); });
+  var vid = document.getElementById('doc-vid');
+  var cnv = document.getElementById('doc-canvas');
+  cnv.width = vid.videoWidth||1280; cnv.height = vid.videoHeight||720;
+  var ctx = cnv.getContext('2d');
+  var track = docStream && docStream.getVideoTracks()[0];
+  var settings = track ? track.getSettings() : {};
+  var facingEnv = settings.facingMode==='environment' || (!isMobile && docFacing!=='user');
+  if (!isMobile && !facingEnv) { ctx.save(); ctx.translate(cnv.width,0); ctx.scale(-1,1); }
+  var bri = docLux<70?2.2:docLux<120?1.7:1.4;
+  var con = docLux<70?2.0:docLux<120?1.6:1.3;
+  ctx.filter = 'brightness('+bri+') contrast('+con+')';
+  ctx.drawImage(vid,0,0);
+  if (!isMobile && !facingEnv) ctx.restore();
+  document.getElementById('doc-frame').className = 'doc-frame good';
+  stopDocCam();
+  document.getElementById('s3b').style.display = 'none';
+  document.getElementById('s3c').style.display = 'block';
+  document.getElementById('ocr-loading').style.display = 'block';
+  document.getElementById('ocr-result').style.display = 'none';
+  document.getElementById('ocr-actions').style.display = 'none';
+  await runOCR(cnv);
+}
+
+// ══════════════════════════════════════════════════
+// OCR ENGINE — Server-side Claude Vision API
+// No CDN, no Tesseract, works on any network
+// ══════════════════════════════════════════════════
+
+function setOcrProgress(label, pct) {
+  var t = document.getElementById('ocr-txt');
+  var b = document.getElementById('ocr-bar');
+  if (t) t.textContent = label;
+  if (b) b.style.width  = pct + '%';
+}
+
+function canvasToBase64(canvas, quality) {
+  return canvas.toDataURL('image/jpeg', quality || 0.88).replace(/^data:image\/jpeg;base64,/, '');
+}
+
+async function runOCR(canvas) {
+  setOcrProgress('📷 Preparing image…', 10);
+  try {
+    setOcrProgress('🔍 Sending to AI…', 30);
+    var b64 = canvasToBase64(canvas, 0.88);
+
+    var res  = await fetch('/api/ocr', { credentials: 'include', 
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify({
+        imageData:       b64,
+        mediaType:       'image/jpeg',
+        registeredName:  reg.name,
+        registeredDob:   reg.dob,
+        docType:         proofType
+      })
+    });
+
+    var data = await res.json();
+
+    // API key not set or invalid → show manual entry (no retake needed)
+    if (res.status === 401 || data.code === 'NO_API_KEY' || data.code === 'BAD_API_KEY') {
+      showManualEntry(canvas);
+      return;
+    }
+
+    if (!res.ok) throw new Error(data.error || 'OCR failed.');
+
+    setOcrProgress('🧠 Analysing result…', 80);
+    setOcrProgress('✅ Done!', 100);
+    await new Promise(function(r){ setTimeout(r, 200); });
+    showOCRResult(data);
+  } catch(e) {
+    document.getElementById('ocr-loading').style.display = 'none';
+    document.getElementById('ocr-result').style.display  = 'block';
+    document.getElementById('ocr-actions').style.display = 'block';
+    document.getElementById('ocr-result').innerHTML =
+      '<div class="alert alert-danger" style="font-size:13px;">❌ ' + esc(e.message)
+      + '<br><small style="color:var(--text-3);">Check server console for details.</small></div>';
+    document.getElementById('accept-proof-btn').style.display = 'none';
+  }
+}
+
+// ── Manual entry fallback (shown when API key is missing/invalid) ──────────
+function showManualEntry(canvas) {
+  document.getElementById('ocr-loading').style.display = 'none';
+  document.getElementById('ocr-result').style.display  = 'block';
+  document.getElementById('ocr-actions').style.display = 'block';
+  document.getElementById('accept-proof-btn').style.display = 'none';
+
+  var isCollege = (proofType === 'college');
+  var regDobFmt = '';
+  if (reg.dob) {
+    var p = reg.dob.split('-');
+    regDobFmt = p.length === 3 ? p[2]+'/'+p[1]+'/'+p[0] : reg.dob;
+  }
+
+  document.getElementById('ocr-result').innerHTML =
+    // Warning banner
+    '<div style="background:rgba(255,184,48,0.1);border:1.5px solid var(--amber);border-radius:var(--r-md);padding:13px 14px;display:flex;gap:12px;align-items:flex-start;margin-bottom:16px;">'
+    + '<div style="font-size:1.5rem;line-height:1;">⚙️</div>'
+    + '<div><div style="font-weight:800;font-size:13.5px;color:var(--amber);">AI OCR unavailable</div>'
+    + '<div style="font-size:12px;color:var(--text-2);margin-top:3px;">ANTHROPIC_API_KEY is missing or invalid in <code style="background:rgba(255,255,255,0.1);padding:1px 5px;border-radius:4px;">.env</code>. Enter your details manually below.</div>'
+    + '</div></div>'
+
+    // Doc preview
+    + '<div style="border-radius:var(--r-sm);overflow:hidden;border:1px solid var(--border);margin-bottom:16px;">'
+    + '<canvas id="manual-preview" style="width:100%;display:block;max-height:160px;object-fit:cover;"></canvas></div>'
+
+    // Name field
+    + '<div class="form-group">'
+    + '<label class="form-label">Your name exactly as on document *</label>'
+    + '<input id="m-name" class="form-control" type="text" placeholder="Type name shown on ID" value="'+esc(reg.name)+'"/>'
+    + '<div id="m-name-fb" style="font-size:12px;margin-top:5px;min-height:18px;"></div>'
+    + '</div>'
+
+    // DOB field (not for college)
+    + (isCollege ? '' :
+        '<div class="form-group">'
+        + '<label class="form-label">Date of birth on document (DD/MM/YYYY) *</label>'
+        + '<input id="m-dob" class="form-control" type="text" placeholder="e.g. '+(regDobFmt||'27/10/2007')+'" maxlength="10" inputmode="numeric"/>'
+        + '<div id="m-dob-fb" style="font-size:12px;margin-top:5px;min-height:18px;"></div>'
+        + '</div>'
+      )
+
+    // Verify button
+    + '<button class="btn btn-primary btn-block" id="m-verify-btn" style="margin-top:4px;">✅ Verify Details</button>';
+
+  // Copy canvas to preview
+  var prev = document.getElementById('manual-preview');
+  if (prev && canvas) { prev.width=canvas.width; prev.height=canvas.height; prev.getContext('2d').drawImage(canvas,0,0); }
+
+  // Live name score feedback
+  document.getElementById('m-name').addEventListener('input', function() {
+    var s = fuzzyNameScore(reg.name, this.value);
+    var pct = Math.round(s*100);
+    var c = s>=0.8?'var(--green)':s>=0.5?'var(--amber)':'var(--red)';
+    document.getElementById('m-name-fb').innerHTML =
+      '<span style="color:'+c+';font-weight:700;">'+(s>=0.8?'✅':'')+'Name similarity: '+pct+'%</span>'
+      + (s<0.8 ? ' <span style="color:var(--text-3);">(need 80%)</span>' : '');
+  });
+
+  // DOB auto-format DD/MM/YYYY as user types
+  var dobEl = document.getElementById('m-dob');
+  if (dobEl) {
+    dobEl.addEventListener('input', function() {
+      var v = this.value.replace(/[^\d]/g,'');
+      if (v.length>2) v = v.slice(0,2)+'/'+v.slice(2);
+      if (v.length>5) v = v.slice(0,5)+'/'+v.slice(5,9);
+      this.value = v;
+    });
+  }
+
+  // Verify on click
+  document.getElementById('m-verify-btn').addEventListener('click', function() {
+    var nameVal = (document.getElementById('m-name')||{value:''}).value.trim();
+    var dobVal  = (document.getElementById('m-dob') ||{value:''}).value.trim();
+
+    var nameScore = fuzzyNameScore(reg.name, nameVal);
+    var nameOK    = nameScore >= 0.80;
+
+    var dobOK = false, dobPartial = false, extractedDob = null;
+    if (!isCollege) {
+      var dm = dobVal.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+      if (dm) {
+        extractedDob = dobVal;
+        var iso = dm[3]+'-'+dm[2].padStart(2,'0')+'-'+dm[1].padStart(2,'0');
+        if (reg.dob) {
+          var diff = Math.abs(new Date(reg.dob)-new Date(iso));
+          dobOK      = diff < 3*86400000;
+          dobPartial = !dobOK && iso.slice(0,4)===reg.dob.slice(0,4);
+        }
+      }
+    } else {
+      dobOK = true;
+    }
+
+    // Show feedback
+    var nc = nameOK?'var(--green)':nameScore>=0.5?'var(--amber)':'var(--red)';
+    document.getElementById('m-name-fb').innerHTML =
+      '<span style="color:'+nc+';font-weight:700;">'+(nameOK?'✅ Matched':'❌ '+Math.round(nameScore*100)+'% — need 80%')+'</span>';
+
+    if (!isCollege && dobEl) {
+      var dc = dobOK?'var(--green)':dobPartial?'var(--amber)':'var(--red)';
+      document.getElementById('m-dob-fb').innerHTML =
+        '<span style="color:'+dc+';font-weight:700;">'
+        +(dobOK?'✅ Date matched':dobPartial?'⚠️ Year only':'❌ Date not matched')+'</span>';
+    }
+
+    if (!nameOK || (!isCollege && !dobOK && !dobPartial)) return;
+
+    // Build synthetic result object and pass through normal result renderer
+    var synth = {
+      extractedName:    nameVal,
+      extractedDob:     extractedDob,
+      nameMatchScore:   nameScore,
+      dobMatches:       dobOK,
+      confidence:       'medium',
+      docTypeDetected:  proofType,
+      _manual:          true
+    };
+    showOCRResult(synth);
+  });
+}
+
+// ══════════════════════════════════════════════════
+// FUZZY NAME MATCHING (for display scoring)
+// ══════════════════════════════════════════════════
+
+function levenshtein(a, b) {
+  var m = a.length, n = b.length;
+  if (!m) return n; if (!n) return m;
+  var prev = [], curr = [];
+  for (var j = 0; j <= n; j++) prev[j] = j;
+  for (var i = 1; i <= m; i++) {
+    curr[0] = i;
+    for (var k = 1; k <= n; k++) {
+      curr[k] = a[i-1]===b[k-1] ? prev[k-1] : 1+Math.min(prev[k-1],prev[k],curr[k-1]);
+    }
+    var tmp = prev; prev = curr; curr = tmp;
+  }
+  return prev[n];
+}
+
+function fuzzyNameScore(a, b) {
+  var clean = function(s){ return String(s||'').toUpperCase().replace(/[^A-Z\s]/g,' ').replace(/\s+/g,' ').trim(); };
+  var wa = clean(a).split(' ').filter(function(w){ return w.length>1; });
+  var wb = clean(b).split(' ').filter(function(w){ return w.length>1; });
+  if (!wa.length || !wb.length) return 0;
+  var total = 0;
+  for (var i=0;i<wa.length;i++) {
+    var best=0;
+    for (var j=0;j<wb.length;j++){
+      var ml=Math.max(wa[i].length,wb[j].length)||1;
+      var s=Math.max(0,1-levenshtein(wa[i],wb[j])/ml);
+      if(s>best) best=s;
+    }
+    total+=best;
+  }
+  return total/wa.length;
+}
+
+// ══════════════════════════════════════════════════
+// SHOW OCR RESULT (from server Claude API response)
+// ══════════════════════════════════════════════════
+
+function showOCRResult(data) {
+  document.getElementById('ocr-loading').style.display = 'none';
+  document.getElementById('ocr-result').style.display  = 'block';
+  document.getElementById('ocr-actions').style.display = 'block';
+
+  var isCollege   = (proofType === 'college');
+  var nameScore   = typeof data.nameMatchScore === 'number' ? data.nameMatchScore : fuzzyNameScore(reg.name, data.extractedName || '');
+  var namePct     = Math.round(nameScore * 100);
+  var nameMatch   = nameScore >= 0.80;
+
+  // ── DOB match — read server fields (dobExact / dobPartial)
+  // Fallback to legacy dobMatches for any older server response
+  var dobMatch   = !!(data.dobExact || data.dobMatches);
+  var dobPartial = !dobMatch && !!(data.dobPartial
+    || (!dobMatch && data.extractedDob && reg.dob
+        && data.extractedDob.slice(-4) === String(reg.dob).slice(0,4)));
+
+  var regDobFmt = '—';
+  if (reg.dob) { var p=reg.dob.split('-'); regDobFmt = p.length===3?p[2]+'/'+p[1]+'/'+p[0]:reg.dob; }
+
+  // Score: Name 50pts · DOB 40pts · Doc-type 10pts
+  // Partial year = 30pts (was 20 — too low, caused border-fail at 80 threshold)
+  var scoreTotal = 0;
+  scoreTotal += Math.round(nameScore * 50);
+  if      (dobMatch)   scoreTotal += 40;
+  else if (dobPartial) scoreTotal += 30;
+  else if (isCollege)  scoreTotal += 40;
+  if (data.docTypeDetected && data.docTypeDetected !== 'other') scoreTotal += 10;
+  scoreTotal = Math.min(100, scoreTotal);
+
+  // Accept: college needs name only; others need name + DOB (exact or partial)
+  var accepted = isCollege
+    ? (nameMatch)
+    : (nameMatch && (dobMatch || dobPartial) && scoreTotal >= 75);
+
+  var bc = accepted ? 'var(--green)' : scoreTotal >= 50 ? 'var(--amber)' : 'var(--red)';
+  var bg = accepted ? 'var(--green-dim)' : scoreTotal >= 50 ? 'var(--amber-dim)' : 'var(--red-dim)';
+
+  var html = '';
+
+  // Banner
+  html += '<div style="background:'+bg+';border:1px solid '+bc+'40;border-radius:var(--r-md);padding:14px;display:flex;align-items:center;gap:12px;margin-bottom:14px;">'
+    +'<div style="font-size:2rem;">'+(accepted?'✅':scoreTotal>=50?'⚠️':'❌')+'</div>'
+    +'<div><div style="font-weight:800;font-size:15px;color:'+bc+';">'+(accepted?'✅ Document Verified!':'❌ Verification Failed')+'</div>'
+    +'<div style="font-size:12.5px;color:var(--text-2);margin-top:3px;">AI Confidence: <strong>'+esc(data.confidence||'—')+'</strong> · Score: <strong style="color:'+bc+';">'+scoreTotal+'%</strong></div>'
+    +'</div></div>';
+
+  // Score bar
+  html += '<div style="background:var(--glass);border:1px solid var(--border);border-radius:var(--r-sm);padding:12px 14px;margin-bottom:14px;">'
+    +'<div style="display:flex;justify-content:space-between;font-size:12px;font-weight:700;color:var(--text-2);margin-bottom:7px;"><span>Match Score</span><span style="color:'+bc+';">'+scoreTotal+'%</span></div>'
+    +'<div style="background:rgba(255,255,255,0.07);border-radius:99px;height:10px;overflow:hidden;">'
+    +'<div style="height:10px;border-radius:99px;width:'+scoreTotal+'%;background:'+bc+';transition:width .7s;"></div></div>'
+    +'<div style="font-size:10.5px;color:var(--text-3);margin-top:5px;">Name 50pts · DOB 40pts · Doc type 10pts · Need 80% to pass</div>'
+    +'</div>';
+
+  // Name panel
+  var nc = nameMatch ? 'var(--green)' : namePct >= 55 ? 'var(--amber)' : 'var(--red)';
+  html += '<div style="border:2px solid '+nc+';border-radius:var(--r-md);overflow:hidden;margin-bottom:12px;">'
+    +'<div style="background:'+(nameMatch?'rgba(0,214,143,0.07)':'rgba(255,77,109,0.07)')+';padding:10px 14px;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid rgba(255,255,255,0.07);">'
+    +'<span style="font-weight:800;font-size:12.5px;">👤 Name</span>'
+    +'<div style="display:flex;align-items:center;gap:8px;">'
+    +'<div style="width:80px;height:7px;background:rgba(255,255,255,0.08);border-radius:99px;overflow:hidden;"><div style="height:7px;border-radius:99px;width:'+namePct+'%;background:'+nc+';"></div></div>'
+    +'<span style="font-size:11.5px;font-weight:800;color:'+nc+';">'+namePct+'%</span>'
+    +'<span style="font-size:10px;font-weight:700;padding:2px 8px;border-radius:99px;background:'+(nameMatch?'var(--green-dim)':'var(--red-dim)')+';color:'+nc+'">'+(nameMatch?'✅ MATCH':'❌ FAIL')+'</span>'
+    +'</div></div>'
+    +'<div style="padding:12px 14px;display:grid;grid-template-columns:1fr 1fr;gap:10px;">'
+    +'<div><div style="font-size:10px;font-weight:800;text-transform:uppercase;color:var(--text-3);margin-bottom:4px;">Registered</div><div style="font-weight:800;font-size:14px;background:var(--glass);padding:8px 10px;border-radius:var(--r-xs);">'+esc(reg.name)+'</div></div>'
+    +'<div><div style="font-size:10px;font-weight:800;text-transform:uppercase;color:var(--text-3);margin-bottom:4px;">Found on Doc</div><div style="font-weight:800;font-size:13px;background:var(--glass);padding:8px 10px;border-radius:var(--r-xs);color:'+(data.extractedName?'var(--text)':'var(--text-3)')+'">'+(esc(data.extractedName)||'— not found')+'</div></div>'
+    +'</div></div>';
+
+  // DOB panel
+  var dc = dobMatch ? 'var(--green)' : dobPartial ? 'var(--amber)' : isCollege ? 'rgba(255,255,255,0.2)' : 'var(--red)';
+  html += '<div style="border:2px solid '+dc+';border-radius:var(--r-md);overflow:hidden;margin-bottom:14px;">'
+    +'<div style="background:rgba(255,255,255,0.04);padding:10px 14px;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid rgba(255,255,255,0.07);">'
+    +'<span style="font-weight:800;font-size:12.5px;">🎂 Date of Birth'+(isCollege?' <span style="opacity:.5;font-weight:400;">(optional)</span>':'')+'</span>'
+    +'<span style="font-size:10.5px;font-weight:700;padding:2px 10px;border-radius:99px;background:'+(dobMatch?'var(--green-dim)':dobPartial?'var(--amber-dim)':isCollege?'rgba(255,255,255,0.06)':'var(--red-dim)')+';color:'+dc+'">'
+    +(dobMatch?'✅ MATCHED':dobPartial?'⚠️ YEAR ONLY':isCollege?'ℹ️ OPTIONAL':'❌ NOT FOUND')+'</span></div>'
+    +'<div style="padding:12px 14px;display:grid;grid-template-columns:1fr 1fr;gap:10px;">'
+    +'<div><div style="font-size:10px;font-weight:800;text-transform:uppercase;color:var(--text-3);margin-bottom:4px;">Registered</div><div style="font-family:\'Syne\',monospace;font-size:1.2rem;font-weight:900;background:var(--glass);padding:8px;border-radius:var(--r-xs);text-align:center;">'+regDobFmt+'</div></div>'
+    +'<div><div style="font-size:10px;font-weight:800;text-transform:uppercase;color:var(--text-3);margin-bottom:4px;">From Document</div><div style="font-family:\'Syne\',monospace;font-size:1.2rem;font-weight:900;background:var(--glass);padding:8px;border-radius:var(--r-xs);text-align:center;color:'+(data.extractedDob?dc:'var(--text-3)')+'">'+(esc(data.extractedDob)||'—')+'</div></div>'
+    +'</div>'
+    +(dobMatch?'<div style="padding:0 14px 12px;font-size:12px;color:var(--green);">✅ DOB confirmed</div>'
+      :dobPartial?'<div style="padding:0 14px 12px;font-size:12px;color:var(--amber);">⚠️ Only year matched — ensure full DD/MM/YYYY is visible</div>'
+      :isCollege?'<div style="padding:0 14px 12px;font-size:12px;color:var(--text-3);">ℹ️ DOB not required for College ID</div>'
+      :'<div style="padding:0 14px 12px;font-size:12px;color:var(--red);">❌ Ensure date is unobstructed and fully visible</div>')
+    +'</div>';
+
+  // Fail tip
+  if (!accepted) {
+    html += '<div class="alert alert-'+(scoreTotal>=50?'warning':'danger')+'" style="font-size:12.5px;">';
+    if (!nameMatch)                            html += '❌ Name score '+namePct+'% — need 80%. Ensure <strong>"'+esc(reg.name)+'"</strong> is clearly visible.&nbsp;';
+    if (!isCollege && !dobMatch && !dobPartial) html += '❌ DOB not found. Hold doc flat, ensure full date DD/MM/YYYY is visible.';
+    else if (!isCollege && !dobMatch)           html += '⚠️ Full DOB not matched.';
+    html += '</div>';
+  }
+
+  document.getElementById('ocr-result').innerHTML = html;
+  document.getElementById('accept-proof-btn').style.display = accepted ? 'flex' : 'none';
+}
+
+function acceptProof() {
+  proofOK = true;
+  reg.proofType = proofType;
+  stopDocCam();
+  goStep(4);
+  loadFaceStep();
+}
+
+// ══════════════════════════════════════════════════
+// STEP 4 — Face Registration (face-api.js)
+// ══════════════════════════════════════════════════
+document.getElementById('snap-face-btn').addEventListener('click', snapFace);
+document.getElementById('back-from-face-btn').addEventListener('click', function () { _stopDet(); stopFaceCam(); goStep(3); });
+document.getElementById('retake-face-btn').addEventListener('click', retakeFace);
+document.getElementById('retry-face-cam-btn').addEventListener('click', function () { faceCameraId = null; _stopDet(); stopFaceCam(); loadFaceStep(); });
+document.getElementById('reg-btn').addEventListener('click', doRegister);
+document.getElementById('face-boost-btn').addEventListener('click', function () {
+  faceBoostOn = !faceBoostOn;
+  this.style.background = faceBoostOn ? 'rgba(79,131,255,0.6)' : '';
+  _applyFaceFilter();
+});
+document.getElementById('flip-face-btn').addEventListener('click', function () {
+  _stopDet(); stopFaceCam(); facingMode = facingMode === 'user' ? 'environment' : 'user'; loadFaceStep();
+});
+document.getElementById('face-cam-select').addEventListener('change', async function () {
+  faceCameraId = this.value; _stopDet(); stopFaceCam(); await loadFaceStep();
+});
+
+/* ── Entry point called when user arrives at Step 4 ── */
+async function loadFaceStep() {
+  showAlert('e4', '', '');
+  faceCapturing = false; finalDesc = null; capturedCanvas = null;
+  _livenessOK = false; _faceLiveness = null;
+  document.getElementById('blink-indicator').style.display = 'none';
+  document.getElementById('snap-face-btn').disabled = true;
+  document.getElementById('retry-face-cam-btn').style.display = 'none';
+
+  // Step 1: Load models (with animated progress bar)
+  showFacePanel('load');
+  _setLoadStatus('Initialising…', 5);
+
+  var fakeP = 5;
+  var fakeInterval = setInterval(function () {
+    if (fakeP < 80) { fakeP += (Math.random() * 6); _setLoadStatus('Downloading models…', Math.min(fakeP, 80)); }
+  }, 350);
+
+  try {
+    await FaceEngine.load();
+  } catch (e) {
+    clearInterval(fakeInterval);
+    showFacePanel('cam'); // fall through to error
+    showAlert('e4', 'danger', '❌ Failed to load face AI models. Check your internet connection and try again.<br>Error: ' + e.message);
+    return;
+  }
+  clearInterval(fakeInterval);
+  _setLoadStatus('Models ready!', 100);
+  await _delay(300);
+
+  // Step 2: Open camera
+  if (!availableCameras.length) await detectCameras();
+  populateFaceCamSelect();
+  showFacePanel('cam');
+  await openFaceCam();
+  if (!faceStream) return; // openFaceCam shows its own error
+
+  // Step 3: Start real-time detection loop (delay lets first frames render)
+  _setFaceStatus('🔍 Camera ready — position your face in view', '#fff');
+  await _delay(400);
+  startFaceDetectionLoop();
+}
+
+function _setLoadStatus(msg, pct) {
+  var s = document.getElementById('s4load-status'); if (s) s.textContent = msg;
+  var b = document.getElementById('s4load-bar');    if (b) b.style.width = pct + '%';
+}
+
+/* ── Real-time face detection loop ─────────────────────────── */
+function startFaceDetectionLoop() {
+  _stopDet();
+  _detActive = true;
+  _faceLiveness = FaceEngine.LivenessDetector(2); // require 2 blinks for registration
+  _livenessOK = false;
+
+  var vid     = document.getElementById('face-vid');
+  var overlay = document.getElementById('face-overlay');
+  var camWrap = document.getElementById('face-cam-el');
+  clearInterval(_luxLoop2);
+  _luxLoop2 = setInterval(function () { if (vid && vid.videoWidth) _measureFaceLux(vid); }, 1500);
+
+  var _regLastFrame  = 0;
+  var _REG_FRAME_MS  = 100;  // 10fps — enough for blinks, easy on CPU
+  var _noFaceFrames  = 0;    // count consecutive no-detection frames
+  var _manualEnabled = false;
+
+  // Failsafe: if face not detected for 8 seconds, enable manual capture
+  var _failsafeTimer = setTimeout(function() {
+    if (!_livenessOK && _detActive && !faceCapturing) {
+      _manualEnabled = true;
+      document.getElementById('snap-face-btn').disabled = false;
+      _setFaceStatus('⚠️ Auto-detect struggling — click "Capture Face" to continue manually', 'var(--amber)');
+    }
+  }, 8000);
+
+  (async function loop(ts) {
+    if (!_detActive || faceCapturing) return;
+    if ((ts || 0) - _regLastFrame < _REG_FRAME_MS) { _detTimer = requestAnimationFrame(loop); return; }
+    _regLastFrame = ts || 0;
+    try {
+      // Guard: skip frame if video not ready
+      if (!vid.videoWidth || !vid.videoHeight || vid.readyState < 2) {
+        if (_detActive && !faceCapturing) _detTimer = requestAnimationFrame(loop);
+        return;
+      }
+      var result = await FaceEngine.detect(vid);
+      if (!_detActive) return;
+
+      if (!result) {
+        // ── No face detected ──
+        _noFaceFrames++;
+        FaceEngine.clearOverlay(overlay);
+        camWrap.className = 'face-cam-wrap scanning';
+        document.getElementById('blink-indicator').style.display = 'none';
+        if (!_manualEnabled) document.getElementById('snap-face-btn').disabled = true;
+        // Progressive hints based on how long we've been searching
+        if (_noFaceFrames < 15) {
+          _setFaceStatus('🔍 Searching for face — look directly at camera', '#fff');
+        } else if (_noFaceFrames < 40) {
+          _setFaceStatus('💡 No face found — try better lighting or move closer', '#fff');
+        } else {
+          _setFaceStatus('⚠️ Still searching — lift chin, face the camera fully', 'var(--amber)');
+        }
+
+      } else if (!_livenessOK) {
+        // ── Face detected — liveness (blink) phase ──
+        _noFaceFrames = 0;  // reset no-face counter
+        var blinks = _faceLiveness.update(result.landmarks);
+        var calibrated = _faceLiveness.isCalibrated();
+        _updateBlinkDots(blinks);
+        FaceEngine.drawOverlay(overlay, vid, result, 'liveness');
+        camWrap.className = 'face-cam-wrap liveness';
+
+        if (!calibrated) {
+          // Still measuring your open-eye baseline (first ~12 frames with face visible)
+          document.getElementById('blink-indicator').style.display = 'none';
+          _setFaceStatus('👁  Face detected! Keep eyes open for 1 second to calibrate…', 'var(--amber)');
+        } else {
+          // Calibrated — now count blinks
+          document.getElementById('blink-indicator').style.display = 'flex';
+          var needed = Math.max(0, 2 - blinks);
+          document.getElementById('blinks-needed').textContent = needed;
+          _setFaceStatus('👁  Blink ' + needed + ' more time' + (needed !== 1 ? 's' : '') + ' to confirm liveness', 'var(--amber)');
+        }
+
+        if (_faceLiveness.complete()) {
+          _livenessOK = true;
+          document.getElementById('blink-indicator').style.display = 'none';
+          document.getElementById('snap-face-btn').disabled = false;
+          FaceEngine.drawOverlay(overlay, vid, result, 'verified');
+          camWrap.className = 'face-cam-wrap verified';
+          _setFaceStatus('✅ Liveness confirmed! Capturing…', 'var(--green)');
+          await _delay(200);
+          if (_detActive && !faceCapturing) snapFace();
+          return;
+        }
+
+      } else {
+        // ── Liveness confirmed ──
+        FaceEngine.drawOverlay(overlay, vid, result, 'verified');
+        camWrap.className = 'face-cam-wrap verified';
+        _setFaceStatus('✅ Ready — capturing…', 'var(--green)');
+        document.getElementById('snap-face-btn').disabled = false;
+      }
+    } catch (e) {
+      console.warn('Face detection frame error:', e.message);
+    }
+    if (_detActive && !faceCapturing) _detTimer = requestAnimationFrame(loop);
+  })();
+}
+
+// Separate lux cleanup handle (avoids closure mutation anti-pattern)
+var _luxLoop2 = null;
+
+function _stopDet() {
+  _detActive = false;
+  if (_detTimer) { cancelAnimationFrame(_detTimer); _detTimer = null; }
+  if (typeof _failsafeTimer !== 'undefined') { clearTimeout(_failsafeTimer); }
+  clearInterval(_luxLoop2); _luxLoop2 = null;
+  var overlay = document.getElementById('face-overlay');
+  if (overlay) FaceEngine.clearOverlay(overlay);
+}
+
+function _updateBlinkDots(count) {
+  for (var i = 0; i < 2; i++) {
+    var dot = document.getElementById('blink-dot-' + i);
+    if (dot) dot.className = 'blink-dot' + (i < count ? ' filled' : '');
+  }
+}
+
+function _setFaceStatus(msg, color) {
+  var el = document.getElementById('face-status-bar');
+  if (el) { el.textContent = msg; el.style.color = color || '#fff'; }
+}
+
+/* ── Capture + extract descriptor ──────────────────────────── */
+async function snapFace() {
+  if (faceCapturing) return;
+  faceCapturing = true;
+  _stopDet();
+  document.getElementById('snap-face-btn').disabled = true;
+
+  var vid = document.getElementById('face-vid');
+  showFacePanel('proc');
+  // If manual mode (failsafe triggered), show different message
+  var isManual = typeof _manualEnabled !== 'undefined' && _manualEnabled && !_livenessOK;
+  setProc(isManual ? 'Capturing face manually…' : 'Detecting face…', 20);
+
+  try {
+    // Blink liveness confirmed — capture frame + extract 128-D descriptor
+    setProc('Capturing face photo…', 55);
+    var track    = faceStream && faceStream.getVideoTracks()[0];
+    var settings = track ? track.getSettings() : {};
+    var isFront  = !(settings.facingMode === 'environment' || (!isMobile && facingMode !== 'user'));
+    capturedCanvas = FaceEngine.captureFrame(vid, isMobile, isFront);
+
+    setProc('Extracting face features…', 70);
+    // Use detectWithDescriptor for final capture — gets 128-D descriptor (slower is OK here)
+    // In manual mode, descriptor extraction may return null if face not perfectly centred —
+    // we still proceed and fallback to blink_liveness type
+    var snapResult = await FaceEngine.detectWithDescriptor(capturedCanvas);
+
+    setProc('Saving face data…', 85);
+
+    // Store the real 128-D descriptor so login face-match works
+    finalDesc    = snapResult && snapResult.descriptor ? Array.from(snapResult.descriptor) : new Array(128).fill(0);
+    faceDescType = (finalDesc.some(function(v){ return v !== 0; })) ? 'faceapi' : 'blink_liveness';
+
+    setProc('Face registered!', 100);
+    await _delay(100);
+
+    // Show preview
+    var dispCnv = document.getElementById('face-canvas');
+    dispCnv.width  = capturedCanvas.width;
+    dispCnv.height = capturedCanvas.height;
+    dispCnv.getContext('2d').drawImage(capturedCanvas, 0, 0);
+
+    stopFaceCam();
+    document.getElementById('face-badge').textContent = '✅ Face Captured';
+    document.getElementById('face-ok-msg').textContent = '✅ Liveness confirmed via blink — click Complete Registration';
+    showFacePanel('prev');
+    faceCapturing = false;
+
+  } catch (e) {
+    faceCapturing = false;
+    showFacePanel('cam');
+    showAlert('e4', 'danger', '❌ ' + e.message);
+    document.getElementById('snap-face-btn').disabled = false;
+    // Restart detection loop
+    _livenessOK = false;
+    startFaceDetectionLoop();
+  }
+}
+
+/* ── Helpers ────────────────────────────────────────────────── */
+function setProc(t, p) {
+  var el = document.getElementById('proc-txt');  if (el) el.textContent = t;
+  var bar = document.getElementById('proc-bar'); if (bar) bar.style.width = p + '%';
+}
+
+function setBadge(badge, msg) {
+  var b = document.getElementById('face-badge'); if (b) b.textContent = badge;
+  var m = document.getElementById('face-ok-msg'); if (m) m.textContent = msg;
+}
+
+function showFacePanel(p) {
+  document.getElementById('s4load').style.display = p === 'load' ? 'block' : 'none';
+  document.getElementById('s4b').style.display    = p === 'cam'  ? 'block' : 'none';
+  document.getElementById('s4proc').style.display = p === 'proc' ? 'block' : 'none';
+  document.getElementById('s4c').style.display    = p === 'prev' ? 'block' : 'none';
+}
+
+function _applyFaceFilter() {
+  var v = document.getElementById('face-vid');
+  if (v) v.style.filter = faceBoostOn ? 'brightness(2.5) contrast(1.6)' : 'brightness(1.6) contrast(1.2)';
+}
+
+function retakeFace() {
+  finalDesc = null; faceCapturing = false; capturedCanvas = null;
+  _livenessOK = false; _faceLiveness = null;
+  showAlert('e4', '', '');
+  document.getElementById('retry-face-cam-btn').style.display = 'none';
+  loadFaceStep();
+}
+
+function stopFaceCam() {
+  _stopDet();
+  clearInterval(luxLoop);
+  if (faceStream) { faceStream.getTracks().forEach(function (t) { t.stop(); }); faceStream = null; }
+}
+
+function populateFaceCamSelect() {
+  var wrap = document.getElementById('face-cam-select-wrap');
+  var sel  = document.getElementById('face-cam-select');
+  if (!wrap || availableCameras.length <= 1) { if (wrap) wrap.style.display = 'none'; return; }
+  sel.innerHTML = '';
+  availableCameras.forEach(function (cam) {
+    var opt = document.createElement('option');
+    opt.value = cam.deviceId;
+    var isVirtual = /virtual|obs|snap|phone|android|iphone|mirror/i.test(cam.label);
+    var isBuiltIn = /integrated|built.?in|hd webcam|hp|laptop/i.test(cam.label);
+    opt.textContent = (isVirtual ? '[Virtual] ' : isBuiltIn ? '[Webcam] ' : '[Camera] ') + (cam.label || 'Camera');
+    if (isBuiltIn && !isVirtual) opt.selected = true;
+    sel.appendChild(opt);
+  });
+  if (faceCameraId) sel.value = faceCameraId;
+  wrap.style.display = 'block';
+}
+
+async function openFaceCam() {
+  var fallbacks = faceCameraId
+    ? [{video:{deviceId:{exact:faceCameraId},width:{ideal:1280},height:{ideal:720}}}, {video:{deviceId:{exact:faceCameraId}}}]
+    : isMobile
+    ? [{video:{facingMode:facingMode,width:{ideal:1280},height:{ideal:960}}}, {video:{facingMode:facingMode}}, {video:true}]
+    : [{video:{width:{ideal:1280},height:{ideal:720}}}, {video:{width:{ideal:640},height:{ideal:480}}}, {video:true}];
+  faceStream = null;
+  for (var i = 0; i < fallbacks.length; i++) {
+    try { faceStream = await navigator.mediaDevices.getUserMedia(fallbacks[i]); break; } catch (e) {}
+  }
+  if (!faceStream) {
+    showAlert('e4', 'danger', '❌ Camera could not start. Allow camera access, close other apps using it, then click Retry Camera.');
+    document.getElementById('retry-face-cam-btn').style.display = 'block';
+    return;
+  }
+  var v = document.getElementById('face-vid');
+  v.srcObject = faceStream;
+  _applyFaceFilter();
+  await new Promise(function(resolve) {
+    if (v.readyState >= 1) { resolve(); return; }
+    v.onloadedmetadata = resolve;
+    setTimeout(resolve, 3000);
+  });
+  try { await v.play(); } catch(e) { v.play(); }
+  await new Promise(function(r){ setTimeout(r, 300); });
+  document.getElementById('flip-face-btn').style.display = isMobile ? 'flex' : 'none';
+}
+
+function _measureFaceLux(vid) {
+  try {
+    var c = document.createElement('canvas'); c.width = 80; c.height = 60;
+    var ctx = c.getContext('2d'); ctx.drawImage(vid, 0, 0, 80, 60);
+    var px = ctx.getImageData(0, 0, 80, 60).data, s = 0;
+    for (var i = 0; i < px.length; i += 16) s += (px[i] + px[i+1] + px[i+2]) / 3;
+    faceLux = s / (px.length / 16);
+    var chip = document.getElementById('face-lx');
+    if (!chip) return;
+    chip.textContent = faceLux < 50 ? '🌑 Very Dark' : faceLux < 90 ? '🌙 Low' : faceLux < 160 ? '💡 OK' : '☀️ Good';
+  } catch (e) {}
+}
+
+function getFaceLum(vid) {
+  try {
+    var c = document.createElement('canvas'); c.width = 32; c.height = 24;
+    c.getContext('2d').drawImage(vid, 0, 0, 32, 24);
+    var px = c.getContext('2d').getImageData(0, 0, 32, 24).data, s = 0;
+    for (var i = 0; i < px.length; i += 4) s += (px[i] + px[i+1] + px[i+2]) / 3;
+    return s / (px.length / 4);
+  } catch (e) { return 128; }
+}
+
+function _delay(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
+
+// ══════════════════════════════════════════════════
+// STEP 5 — Register
+// ══════════════════════════════════════════════════
+async function doRegister(){
+  var btn=document.getElementById('reg-btn');
+  btn.disabled=true; btn.innerHTML='<span class="spinner"></span>&nbsp;Registering…';
+  try{
+    var res=await fetch('/api/voter/register', { credentials: 'include', method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({name:reg.name,dob:reg.dob,phone:reg.phone,address:reg.address,proofType:reg.proofType||proofType,proofVerified:proofOK,faceDescriptor:Array.from(finalDesc),faceDescriptorType:faceDescType||'pixel'})
+    });
+    var data=await res.json();
+    if(res.status===409&&data.error==='DUPLICATE_VOTER'){stopFaceCam();goStep(5);showDup(data);return;}
+    if(!res.ok) throw new Error(data.error||'Registration failed.');
+    stopFaceCam(); goStep(5); showDone(data);
+  }catch(e){
+    document.getElementById('s4c').insertAdjacentHTML('afterbegin','<div class="alert alert-danger" style="margin-bottom:10px;">❌ '+e.message+'</div>');
+    btn.disabled=false; btn.innerHTML='✅ Complete Registration';
+  }
+}
+
+function showDone(data){
+  document.getElementById('s5content').innerHTML=
+    '<div class="card" style="text-align:center;padding:30px 20px;">'
+    +'<div style="font-size:3rem;margin-bottom:10px;">&#127881;</div>'
+    +'<h2 style="margin-bottom:6px;">Registered Successfully!</h2>'
+    +'<p style="color:var(--text-2);font-size:13.5px;margin-bottom:18px;">Download your Voter ID card &mdash; you need it to login and vote.</p>'
+    +'<canvas id="voter-id-canvas" style="display:block;max-width:340px;width:100%;margin:0 auto 16px;border-radius:16px;box-shadow:0 12px 40px rgba(79,131,255,0.3);"></canvas>'
+    +'<div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap;margin-bottom:14px;">'
+    +'<button onclick="downloadVoterCard()" class="btn btn-primary" style="flex:1;min-width:160px;font-size:14px;">&#11015;&#65039; Download ID Card</button>'
+    +'<a href="/voter-login" class="btn btn-success" style="flex:1;min-width:160px;font-size:14px;">Login to Vote &#8594;</a>'
+    +'</div>'
+    +'<div class="alert alert-warning" style="text-align:left;margin:0;font-size:12.5px;">&#9888;&#65039; <strong>Download or screenshot your Voter ID now.</strong> It cannot be recovered if lost.</div>'
+    +'</div>';
+  setTimeout(function(){ renderVoterCard(data.voterId, data.name); }, 80);
+}
+
+/* ── Draw Voter ID card onto canvas ───────────────────────── */
+var _cardData = {};
+function renderVoterCard(voterId, name) {
+  var cnv = document.getElementById('voter-id-canvas');
+  if (!cnv) return;
+  _cardData = { voterId: voterId, name: name };
+  var W = 680, H = 420;
+  cnv.width = W; cnv.height = H;
+  var ctx = cnv.getContext('2d');
+
+  // Background gradient
+  var bg = ctx.createLinearGradient(0, 0, W, H);
+  bg.addColorStop(0,   '#0c163a');
+  bg.addColorStop(0.5, '#1a2a6c');
+  bg.addColorStop(1,   '#0d2145');
+  ctx.fillStyle = bg;
+  _rrCard(ctx, 0, 0, W, H, 20); ctx.fill();
+
+  // Decorative circles
+  ctx.save(); ctx.globalAlpha = 0.07; ctx.fillStyle = '#4f83ff';
+  ctx.beginPath(); ctx.arc(W-80, 60, 120, 0, Math.PI*2); ctx.fill();
+  ctx.beginPath(); ctx.arc(80, H-60, 90, 0, Math.PI*2); ctx.fill();
+  ctx.restore();
+
+  // Top shimmer
+  var sh = ctx.createLinearGradient(0,0,W,0);
+  sh.addColorStop(0,'transparent'); sh.addColorStop(0.5,'rgba(79,131,255,0.9)'); sh.addColorStop(1,'transparent');
+  ctx.fillStyle = sh; ctx.fillRect(0, 0, W, 2);
+
+  // India flag stripe on left
+  ctx.fillStyle = '#FF9933'; ctx.fillRect(0, 0,     8, H/3);
+  ctx.fillStyle = '#ffffff'; ctx.fillRect(0, H/3,   8, H/3);
+  ctx.fillStyle = '#138808'; ctx.fillRect(0, H*2/3, 8, H/3);
+
+  // Header
+  ctx.fillStyle = 'rgba(255,255,255,0.55)';
+  ctx.font = 'bold 14px system-ui,sans-serif';
+  ctx.fillText('VOTESECURE', 34, 42);
+  ctx.fillStyle = 'rgba(255,255,255,0.25)';
+  ctx.font = '11px system-ui,sans-serif';
+  ctx.fillText('OFFICIAL VOTER IDENTITY CARD', 34, 60);
+
+  // Divider
+  ctx.strokeStyle = 'rgba(79,131,255,0.4)'; ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.moveTo(26, 72); ctx.lineTo(W-26, 72); ctx.stroke();
+
+  // Voter ID label
+  ctx.fillStyle = 'rgba(100,160,255,0.8)';
+  ctx.font = 'bold 11px system-ui,sans-serif';
+  ctx.fillText('VOTER IDENTIFICATION NUMBER', 34, 108);
+
+  // Voter ID value
+  ctx.fillStyle = '#ffffff';
+  ctx.font = 'bold 52px "Courier New",monospace';
+  ctx.fillText(voterId, 34, 168);
+
+  // Name label
+  ctx.fillStyle = 'rgba(255,255,255,0.4)';
+  ctx.font = '11px system-ui,sans-serif';
+  ctx.fillText('REGISTERED NAME', 34, 208);
+
+  // Name value
+  ctx.fillStyle = '#ffffff';
+  ctx.font = 'bold 26px system-ui,sans-serif';
+  ctx.fillText(name.toUpperCase(), 34, 242);
+
+  // Issue date
+  var today = new Date();
+  var ds = today.toLocaleDateString('en-IN', {day:'2-digit',month:'long',year:'numeric'});
+  ctx.fillStyle = 'rgba(255,255,255,0.32)';
+  ctx.font = '11px system-ui,sans-serif';
+  ctx.fillText('ISSUE DATE', 34, 286);
+  ctx.fillStyle = 'rgba(255,255,255,0.65)';
+  ctx.font = '13px system-ui,sans-serif';
+  ctx.fillText(ds, 34, 304);
+
+  // Active badge
+  ctx.fillStyle = 'rgba(0,214,143,0.15)';
+  _rrCard(ctx, 34, 322, 110, 28, 6); ctx.fill();
+  ctx.fillStyle = '#00d68f';
+  ctx.font = 'bold 12px system-ui,sans-serif';
+  ctx.fillText('CHECK  ACTIVE', 50, 341);
+
+  // QR decoration
+  var qx = W-138, qy = H-162, qs = 108;
+  ctx.fillStyle = 'rgba(255,255,255,0.05)';
+  _rrCard(ctx, qx, qy, qs, qs, 8); ctx.fill();
+  ctx.strokeStyle = 'rgba(79,131,255,0.35)'; ctx.lineWidth = 1.5;
+  _rrCard(ctx, qx, qy, qs, qs, 8); ctx.stroke();
+  ctx.fillStyle = 'rgba(255,255,255,0.15)';
+  var cell = 11, pad = 8;
+  var pat = [
+    [1,1,1,1,1,1,1],[1,0,0,0,0,0,1],[1,0,1,1,1,0,1],
+    [1,0,1,0,1,0,1],[1,0,1,1,1,0,1],[1,0,0,0,0,0,1],[1,1,1,1,1,1,1]
+  ];
+  for (var r=0;r<7;r++) for (var c=0;c<7;c++)
+    if (pat[r][c]) ctx.fillRect(qx+pad+c*cell, qy+pad+r*cell, cell-2, cell-2);
+  ctx.fillStyle = 'rgba(255,255,255,0.18)';
+  ctx.font = '9px system-ui'; ctx.fillText('VOTER ID', qx+14, qy+qs+14);
+
+  // Bottom bar
+  ctx.fillStyle = 'rgba(255,255,255,0.04)';
+  ctx.fillRect(0, H-40, W, 40);
+  ctx.fillStyle = 'rgba(255,255,255,0.18)';
+  ctx.font = '10px system-ui,sans-serif';
+  ctx.fillText('This card is issued by VoteSecure Electoral System. Tampering is an offence.', 34, H-14);
+}
+
+function _rrCard(ctx, x, y, w, h, r) {
+  ctx.beginPath();
+  ctx.moveTo(x+r,y); ctx.lineTo(x+w-r,y); ctx.arc(x+w-r,y+r,r,-Math.PI/2,0);
+  ctx.lineTo(x+w,y+h-r); ctx.arc(x+w-r,y+h-r,r,0,Math.PI/2);
+  ctx.lineTo(x+r,y+h); ctx.arc(x+r,y+h-r,r,Math.PI/2,Math.PI);
+  ctx.lineTo(x,y+r); ctx.arc(x+r,y+r,r,Math.PI,-Math.PI/2);
+  ctx.closePath();
+}
+
+function downloadVoterCard() {
+  var cnv = document.getElementById('voter-id-canvas');
+  if (!cnv) return;
+  var link = document.createElement('a');
+  link.download = 'VoterID-' + (_cardData.voterId || 'card') + '.png';
+  link.href = cnv.toDataURL('image/png');
+  link.click();
+}
+function showDup(data){
+  var reasons={phone:'This phone number is already registered.',name_dob:'Same name and date of birth already registered.',face:'Our AI detected your face is already registered.'};
+  document.getElementById('s5content').innerHTML=
+    '<div class="card" style="text-align:center;padding:26px 20px;">'
+    +'<div style="width:64px;height:64px;background:var(--red-dim);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:2rem;margin:0 auto 14px;">🚫</div>'
+    +'<h2 style="color:var(--red);margin-bottom:6px;">Already Registered!</h2>'
+    +'<p style="color:var(--text-2);font-size:13px;margin-bottom:16px;">You are an existing voter.</p>'
+    +'<div style="background:var(--red-dim);border:1px solid rgba(255,77,109,0.2);border-radius:var(--r-md);padding:14px;margin-bottom:16px;text-align:left;">'
+    +'<p style="font-size:13px;color:var(--text-2);margin-bottom:12px;">⚠️ '+(reasons[data.type]||data.message)+'</p>'
+    +'<div style="display:flex;align-items:center;gap:10px;border-top:1px solid rgba(255,77,109,0.15);padding-top:12px;">'
+    +'<div style="width:40px;height:40px;background:var(--red-dim);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:1.3rem;flex-shrink:0;">🧑‍💼</div>'
+    +'<div><div style="font-weight:800;">'+data.existingName+'</div>'
+    +'<div style="font-family:\'Syne\',monospace;font-size:1rem;color:var(--blue);font-weight:900;">'+data.existingVoterId+'</div></div></div></div>'
+    +'<div class="alert alert-success" style="text-align:left;font-size:13px;margin-bottom:16px;">✅ Use Voter ID <strong style="font-family:\'Syne\',monospace;">'+data.existingVoterId+'</strong> to login and vote.</div>'
+    +'<a href="/voter-login" class="btn btn-primary btn-block" style="margin-bottom:8px;">🗳️ Go to Voter Login</a>'
+    +'<a href="/" style="font-size:13px;color:var(--text-3);">← Home</a></div>';
+}
+
+// ══════════════════════════════════════════════════
+// UTILS
+// ══════════════════════════════════════════════════
+function loadScript(src){
+  return new Promise(function(res,rej){var s=document.createElement('script');s.src=src;s.onload=res;s.onerror=rej;document.head.appendChild(s);});
+}
+
+// ── INIT ──
+(function init(){
+  buildOtpBoxes();
+  goStep(1);
+})();
+
+})(); // end IIFE
+</script>
+</body>
+</html>

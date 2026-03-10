@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>Admin Login — VoteSecure</title>
+<link rel="stylesheet" href="/css/style.css"/>
+</head>
+<body>
+<div class="bg-grid"></div>
+
+<nav class="navbar">
+  <a href="/" class="navbar-brand">
+    <div class="logo-icon">🗳️</div>
+    VoteSecure
+  </a>
+</nav>
+
+<div class="auth-wrap" style="padding-top:0;">
+  <div class="auth-card" style="max-width:420px;">
+    <div class="landing-orb" style="width:280px;height:280px;top:-60px;right:-60px;background:radial-gradient(circle,rgba(168,85,247,0.14) 0%,transparent 70%);"></div>
+
+    <div class="auth-logo" style="background:linear-gradient(135deg,#7c3aed,#a855f7);box-shadow:0 8px 24px rgba(168,85,247,0.35);">⚙️</div>
+    <h1 class="auth-title">Admin Login</h1>
+    <p class="auth-sub">Authorized administrators only</p>
+
+    <!-- Security notice -->
+    <div class="alert alert-warning" style="font-size:12px;margin-bottom:18px;">
+      🔒 <strong>Protected:</strong> 5 failed attempts triggers a 15-minute lockout. All logins are logged.
+    </div>
+
+    <!-- Attempt dots -->
+    <div id="attempt-wrap" class="hidden" style="text-align:center;margin-bottom:14px;">
+      <div style="display:flex;gap:6px;justify-content:center;margin-bottom:6px;" id="attempt-dots">
+        <span class="dot-el" style="width:12px;height:12px;border-radius:50%;background:rgba(255,255,255,0.12);display:inline-block;transition:background .3s;"></span>
+        <span class="dot-el" style="width:12px;height:12px;border-radius:50%;background:rgba(255,255,255,0.12);display:inline-block;transition:background .3s;"></span>
+        <span class="dot-el" style="width:12px;height:12px;border-radius:50%;background:rgba(255,255,255,0.12);display:inline-block;transition:background .3s;"></span>
+        <span class="dot-el" style="width:12px;height:12px;border-radius:50%;background:rgba(255,255,255,0.12);display:inline-block;transition:background .3s;"></span>
+        <span class="dot-el" style="width:12px;height:12px;border-radius:50%;background:rgba(255,255,255,0.12);display:inline-block;transition:background .3s;"></span>
+      </div>
+      <div id="attempt-txt" style="font-size:11.5px;color:var(--text-3);"></div>
+    </div>
+
+    <div id="main-alert"></div>
+
+    <div class="form-group">
+      <label class="form-label">Username</label>
+      <input type="text" id="username-input" class="form-control" placeholder="Enter username" autocomplete="username"/>
+    </div>
+    <div class="form-group" style="margin-bottom:22px;">
+      <label class="form-label">Password</label>
+      <input type="password" id="password-input" class="form-control" placeholder="Enter password" autocomplete="current-password"/>
+    </div>
+
+    <button class="btn btn-primary btn-block btn-lg" id="login-btn">Login to Admin Panel</button>
+    <div style="text-align:center;margin-top:16px;">
+      <a href="/" style="font-size:13px;color:var(--text-3);text-decoration:none;">← Back to Home</a>
+    </div>
+  </div>
+</div>
+
+<script>
+(function () {
+  'use strict';
+
+  var failCount = 0;
+  var loginBtn  = document.getElementById('login-btn');
+  var mainAlert = document.getElementById('main-alert');
+  var usernameInput = document.getElementById('username-input');
+  var passwordInput = document.getElementById('password-input');
+
+  // Redirect if already logged in
+  fetch('/api/admin/me', { credentials: 'include' }).then(function(r){return r.json();}).then(function(d){
+    if (d.admin) location.href = '/admin';
+  });
+
+  if (location.search.includes('auth=required')) {
+    mainAlert.innerHTML = '<div class="alert alert-warning">⚠️ Admin login required to access that page.</div>';
+  }
+
+  function updateDots() {
+    var dots = document.querySelectorAll('.dot-el');
+    document.getElementById('attempt-wrap').classList.remove('hidden');
+    dots.forEach(function (d, i) {
+      d.style.background = i < failCount
+        ? 'var(--red)'
+        : 'rgba(255,255,255,0.12)';
+    });
+    var rem = 5 - failCount;
+    document.getElementById('attempt-txt').textContent = rem > 0
+      ? '⚠️ ' + rem + ' attempt' + (rem === 1 ? '' : 's') + ' remaining'
+      : '🔒 Account locked — wait 15 minutes';
+  }
+
+  async function doLogin() {
+    var uname = usernameInput.value.trim();
+    var pwd   = passwordInput.value;
+    if (!uname || !pwd) {
+      mainAlert.innerHTML = '<div class="alert alert-danger">All fields are required.</div>';
+      return;
+    }
+    loginBtn.disabled = true;
+    loginBtn.innerHTML = '<span class="spinner"></span>&nbsp;Logging in…';
+    mainAlert.innerHTML = '';
+    try {
+      var res  = await fetch('/api/admin/login', { credentials: 'include', 
+        method: 'POST', headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({ username: uname, password: pwd })
+      });
+      var data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+      location.href = '/admin';
+    } catch (e) {
+      var msg = e.message || 'Login failed.';
+      var isLocked = /lock|wait/i.test(msg);
+      if (isLocked) {
+        mainAlert.innerHTML = '<div style="background:var(--red-dim);border:1px solid rgba(255,77,109,0.3);border-radius:var(--r-md);padding:20px;text-align:center;">'
+          + '<div style="font-size:2rem;margin-bottom:8px;">🔒</div>'
+          + '<div style="font-weight:800;color:var(--red);margin-bottom:4px;">Account Locked</div>'
+          + '<div style="font-size:12.5px;color:var(--text-2);">' + msg + '</div></div>';
+        loginBtn.disabled = true;
+      } else {
+        failCount = Math.min(failCount + 1, 5);
+        updateDots();
+        mainAlert.innerHTML = '<div class="alert alert-danger">❌ ' + msg + '</div>';
+        loginBtn.disabled = false;
+        loginBtn.innerHTML = 'Login to Admin Panel';
+      }
+    }
+  }
+
+  loginBtn.addEventListener('click', doLogin);
+  document.addEventListener('keydown', function(e) {
+    if (e.key === 'Enter') doLogin();
+  });
+})();
+</script>
+</body>
+</html>

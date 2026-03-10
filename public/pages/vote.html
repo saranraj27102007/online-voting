@@ -1,0 +1,380 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>Cast Your Vote — VoteSecure</title>
+<link rel="stylesheet" href="/css/style.css"/>
+</head>
+<body>
+<div class="bg-grid"></div>
+
+<nav class="navbar">
+  <a href="/" class="navbar-brand">
+    <div class="logo-icon">🗳️</div>
+    VoteSecure
+  </a>
+  <div class="nav-right">
+    <span class="nav-user" id="nav-name">Loading…</span>
+    <span class="badge badge-blue" id="nav-voter-id">—</span>
+    <button class="btn btn-ghost btn-sm" id="logout-btn">Logout</button>
+  </div>
+</nav>
+
+<div class="vote-page">
+  <!-- Welcome strip -->
+  <div style="background:linear-gradient(135deg,#0c1a38 0%,#0d2145 100%);border:1px solid rgba(79,131,255,0.22);border-radius:var(--r-lg);padding:22px 26px;margin-bottom:24px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;">
+    <div>
+      <div style="font-size:11px;text-transform:uppercase;letter-spacing:0.08em;color:var(--text-3);margin-bottom:4px;">Logged in as</div>
+      <div id="welcome-name" style="font-family:'Syne',sans-serif;font-size:1.2rem;font-weight:800;"></div>
+      <div id="welcome-id" style="font-size:12.5px;color:var(--text-2);margin-top:2px;"></div>
+    </div>
+    <div style="text-align:right;">
+      <div style="font-size:12px;color:var(--green);">🔐 Face Verified</div>
+      <div style="font-size:11px;color:var(--text-3);margin-top:2px;">Identity confirmed via live scan</div>
+    </div>
+  </div>
+
+  <div id="page-alert"></div>
+  <div id="elections-container">
+    <div class="empty-state"><span class="spinner spinner-dark" style="width:28px;height:28px;margin:0 auto 14px;display:block;"></span><p>Loading elections…</p></div>
+  </div>
+</div>
+
+<!-- Confirm Vote Modal -->
+<div class="modal-overlay hidden" id="confirm-modal">
+  <div class="modal" style="max-width:440px;text-align:center;">
+    <div class="modal-header" style="justify-content:flex-end;">
+      <button class="modal-close" id="modal-close-btn">✕</button>
+    </div>
+    <div id="confirm-symbol" style="font-size:3.5rem;margin-bottom:12px;"></div>
+    <h2 id="confirm-name" style="margin-bottom:4px;font-size:1.3rem;"></h2>
+    <p id="confirm-party" style="color:var(--text-2);font-size:14px;margin-bottom:22px;"></p>
+    <div class="alert alert-warning" style="text-align:left;font-size:13px;margin-bottom:20px;">
+      ⚠️ <strong>This action cannot be undone.</strong> Once confirmed, your vote is final.
+    </div>
+    <div id="modal-alert"></div>
+    <div style="display:flex;gap:10px;">
+      <button class="btn btn-secondary flex-1" id="modal-cancel-btn">Cancel</button>
+      <button class="btn btn-success flex-1" id="modal-confirm-btn">✅ Confirm My Vote</button>
+    </div>
+  </div>
+</div>
+
+<!-- Thank You Modal -->
+<div class="modal-overlay hidden" id="thankyou-modal">
+  <div class="modal" style="max-width:420px;text-align:center;">
+    <div style="font-size:4rem;margin-bottom:16px;">🎉</div>
+    <h2 style="margin-bottom:8px;">Thank You for Voting!</h2>
+    <p style="color:var(--text-2);margin-bottom:22px;font-size:14.5px;">Your vote has been securely recorded. Every vote counts!</p>
+    <div style="background:linear-gradient(135deg,#0c1a38,#0d2145);border:1px solid rgba(79,131,255,0.25);border-radius:var(--r-md);padding:16px 22px;margin-bottom:22px;">
+      <div style="font-size:11px;text-transform:uppercase;letter-spacing:0.07em;color:var(--text-3);margin-bottom:5px;">Vote cast for</div>
+      <div id="thankyou-candidate" style="font-family:'Syne',sans-serif;font-size:1.3rem;font-weight:800;color:var(--blue);"></div>
+    </div>
+    <button class="btn btn-secondary btn-block" id="thankyou-close-btn">Close</button>
+  </div>
+</div>
+
+<script>
+(function () {
+  'use strict';
+
+  var currentVoter   = null;
+  var elections      = [];
+
+  // Per-election selection map: electionId → { candidateId, symbol, name, party }
+  var selections = {};
+
+  // Which election's confirm modal is open right now
+  var activeElectionId = null;
+
+  /* ─── DOM refs (modals) ──────────────────────────────── */
+  var confirmModal    = document.getElementById('confirm-modal');
+  var thankyouModal   = document.getElementById('thankyou-modal');
+  var confirmSymbol   = document.getElementById('confirm-symbol');
+  var confirmName     = document.getElementById('confirm-name');
+  var confirmParty    = document.getElementById('confirm-party');
+  var modalAlert      = document.getElementById('modal-alert');
+  var modalConfirmBtn = document.getElementById('modal-confirm-btn');
+  var modalCancelBtn  = document.getElementById('modal-cancel-btn');
+  var modalCloseBtn   = document.getElementById('modal-close-btn');
+  var thankyouCand    = document.getElementById('thankyou-candidate');
+  var thankyouCloseBtn= document.getElementById('thankyou-close-btn');
+  var logoutBtn       = document.getElementById('logout-btn');
+
+  /* ─── Modal handlers ─────────────────────────────────── */
+  function closeConfirm() { confirmModal.classList.add('hidden'); }
+  function closeThankyou() { thankyouModal.classList.add('hidden'); }
+
+  modalCancelBtn.addEventListener('click', closeConfirm);
+  modalCloseBtn.addEventListener('click', closeConfirm);
+  thankyouCloseBtn.addEventListener('click', closeThankyou);
+
+  confirmModal.addEventListener('click', function(e) {
+    if (e.target === confirmModal) closeConfirm();
+  });
+  thankyouModal.addEventListener('click', function(e) {
+    if (e.target === thankyouModal) closeThankyou();
+  });
+
+  logoutBtn.addEventListener('click', async function () {
+    await fetch('/api/voter/logout', { credentials: 'include',  method: 'POST' });
+    location.href = '/';
+  });
+
+  /* ─── Init ───────────────────────────────────────────── */
+  async function init() {
+    var res  = await fetch('/api/voter/me', { credentials: 'include' });
+    var data = await res.json();
+    if (!data.voter)         return (location.href = '/voter-login');
+    if (!data.faceVerified)  return (location.href = '/voter-login'); // must have completed face scan
+
+    currentVoter = data.voter;
+    document.getElementById('nav-name').textContent    = currentVoter.name;
+    document.getElementById('nav-voter-id').textContent= currentVoter.voterId;
+    document.getElementById('welcome-name').textContent= currentVoter.name;
+    document.getElementById('welcome-id').textContent  = 'Voter ID: ' + currentVoter.voterId;
+    loadElections();
+  }
+
+  async function loadElections() {
+    var res = await fetch('/api/voter/elections', { credentials: 'include' });
+    elections = await res.json();
+    renderElections();
+  }
+
+  /* ─── Render ─────────────────────────────────────────── */
+  function renderElections() {
+    var container = document.getElementById('elections-container');
+    if (!elections.length) {
+      container.innerHTML = '<div class="empty-state"><span class="emoji">🗳️</span><h3>No Elections Available</h3><p>Check back later.</p></div>';
+      return;
+    }
+
+    container.innerHTML = '';
+    elections.forEach(function (e) {
+      var el = buildElectionCard(e);
+      container.appendChild(el);
+    });
+  }
+
+  function buildElectionCard(e) {
+    var wrap = document.createElement('div');
+    wrap.style.marginBottom = '24px';
+
+    var end   = new Date(e.endDate).toLocaleDateString('en-IN', { day:'numeric', month:'long', year:'numeric' });
+    var total = e.totalVotes;
+    var minAge = e.minAge || 0;
+    var maxAge = e.maxAge || 0;
+    var hasAge = minAge > 0 || maxAge > 0;
+    var ageLabel = minAge > 0 && maxAge > 0
+      ? 'Age ' + minAge + '–' + maxAge + ' yrs'
+      : minAge > 0 ? minAge + '+ yrs' : '≤' + maxAge + ' yrs';
+
+    var voterAge = null;
+    var ageOK    = true;
+    if (hasAge && currentVoter.dob) {
+      var dob = new Date(currentVoter.dob);
+      var now = new Date();
+      voterAge = now.getFullYear() - dob.getFullYear();
+      var m = now.getMonth() - dob.getMonth();
+      if (m < 0 || (m === 0 && now.getDate() < dob.getDate())) voterAge--;
+      if (minAge > 0 && voterAge < minAge) ageOK = false;
+      if (maxAge > 0 && voterAge > maxAge) ageOK = false;
+    }
+
+    /* ── Already voted ── */
+    if (e.userVoted) {
+      wrap.innerHTML = buildVotedCard(e, total, end, hasAge, ageLabel);
+      return wrap;
+    }
+
+    /* ── Age restricted ── */
+    if (hasAge && !ageOK) {
+      wrap.innerHTML = buildAgeRestrictedCard(e, end, ageLabel, voterAge, minAge, maxAge);
+      return wrap;
+    }
+
+    /* ── Active election ── */
+    var card = document.createElement('div');
+    card.className = 'card';
+
+    card.innerHTML =
+      '<div class="election-header" style="margin:-28px -28px 22px;border-radius:var(--r-lg) var(--r-lg) 0 0;">' +
+        '<div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:10px;">' +
+          '<div>' +
+            '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px;">' +
+              '<span class="badge badge-green">🟢 ACTIVE</span>' +
+              (hasAge ? '<span class="badge badge-blue">🎂 ' + ageLabel + '</span>' : '') +
+            '</div>' +
+            '<h2 style="font-size:1.25rem;">' + esc(e.title) + '</h2>' +
+            (e.description ? '<p style="color:rgba(255,255,255,0.65);font-size:13px;margin-top:4px;">' + esc(e.description) + '</p>' : '') +
+          '</div>' +
+        '</div>' +
+        '<div class="election-meta">' +
+          '<span>👥 ' + e.candidates.length + ' candidates</span>' +
+          '<span>🗳️ ' + total + ' votes cast</span>' +
+          '<span>📅 Closes ' + end + '</span>' +
+        '</div>' +
+      '</div>' +
+      '<h4 style="margin-bottom:14px;color:var(--text-3);font-size:11.5px;text-transform:uppercase;letter-spacing:0.07em;">Select a Candidate</h4>' +
+      '<div class="candidates-grid" id="cand-grid-' + e.id + '"></div>' +
+      '<button class="btn btn-primary btn-block btn-lg" id="vote-btn-' + e.id + '" disabled style="margin-top:4px;">🗳️ Cast My Vote</button>';
+
+    wrap.appendChild(card);
+
+    // Render candidate cards using DOM (no inline onclick with user data)
+    var grid = card.querySelector('#cand-grid-' + e.id);
+    e.candidates.forEach(function (c) {
+      var cc = document.createElement('div');
+      cc.className = 'candidate-card';
+      cc.dataset.electionId   = e.id;
+      cc.dataset.candidateId  = c.id;
+      cc.dataset.symbol       = c.symbol;
+      cc.dataset.name         = c.name;
+      cc.dataset.party        = c.party;
+      cc.innerHTML =
+        '<span class="candidate-symbol">' + c.symbol + '</span>' +
+        '<div class="candidate-name">' + esc(c.name) + '</div>' +
+        '<div class="candidate-party">' + esc(c.party) + '</div>';
+      cc.addEventListener('click', onSelectCandidate);
+      grid.appendChild(cc);
+    });
+
+    // Vote button
+    card.querySelector('#vote-btn-' + e.id).addEventListener('click', function () {
+      openConfirmModal(e.id);
+    });
+
+    return wrap;
+  }
+
+  function buildVotedCard(e, total, end, hasAge, ageLabel) {
+    var votedC = e.candidates.find(function(c){ return c.id === e.userVotedFor; });
+    var bars   = e.candidates.map(function(c, i) {
+      var pct    = total ? Math.round((c.votes / total) * 100) : 0;
+      var leader = i === 0 && e.candidates.every(function(x,j){ return j===0 || x.votes <= c.votes; });
+      return '<div class="result-bar">' +
+        '<div class="result-bar-header">' +
+          '<span class="result-bar-name">' + c.symbol + ' ' + esc(c.name) +
+            (leader && total > 0 ? ' <span class="winner-badge">🏆 Leading</span>' : '') +
+            (c.id === e.userVotedFor ? ' <span class="badge badge-blue" style="font-size:10px;">Your Vote</span>' : '') +
+          '</span>' +
+          '<span class="result-bar-info">' + c.votes + ' · ' + pct + '%</span>' +
+        '</div>' +
+        '<div class="result-bar-track"><div class="result-bar-fill" style="width:' + pct + '%;background:' + c.color + ';"></div></div>' +
+      '</div>';
+    }).join('');
+    return '<div class="card">' +
+      '<div class="election-header" style="margin:-28px -28px 20px;border-radius:var(--r-lg) var(--r-lg) 0 0;">' +
+        '<div style="display:flex;gap:8px;margin-bottom:8px;flex-wrap:wrap;">' +
+          '<span class="badge badge-green">✅ VOTED</span>' +
+          (hasAge ? '<span class="badge badge-blue">🎂 ' + ageLabel + '</span>' : '') +
+        '</div>' +
+        '<h2 style="font-size:1.2rem;">' + esc(e.title) + '</h2>' +
+        '<div class="election-meta"><span>🗳️ ' + total + ' total votes</span><span>📅 Closes ' + end + '</span></div>' +
+      '</div>' +
+      (votedC ? '<div class="alert alert-success" style="margin-bottom:18px;">✅ You voted for <strong>' + votedC.symbol + ' ' + esc(votedC.name) + '</strong></div>' : '') +
+      '<h4 style="margin-bottom:14px;color:var(--text-3);font-size:11px;text-transform:uppercase;letter-spacing:0.07em;">Live Results</h4>' +
+      bars + '</div>';
+  }
+
+  function buildAgeRestrictedCard(e, end, ageLabel, voterAge, minAge, maxAge) {
+    var reason = minAge > 0 && voterAge < minAge
+      ? 'This election requires voters to be at least <strong>' + minAge + ' years old</strong>. Your age: <strong>' + voterAge + '</strong>.'
+      : 'This election is for voters aged <strong>' + maxAge + ' or younger</strong>. Your age: <strong>' + voterAge + '</strong>.';
+    return '<div class="card" style="border:1px solid rgba(255,77,109,0.25);">' +
+      '<div style="background:linear-gradient(135deg,#2a0814,#4a0f1e);border:1px solid rgba(255,77,109,0.2);border-radius:var(--r-md);padding:20px;margin-bottom:16px;">' +
+        '<div style="display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap;">' +
+          '<span class="badge badge-red">🚫 AGE RESTRICTED</span>' +
+          '<span class="badge badge-blue">🎂 ' + ageLabel + '</span>' +
+        '</div>' +
+        '<h2 style="font-size:1.15rem;">' + esc(e.title) + '</h2>' +
+        '<div style="font-size:12px;color:var(--text-3);margin-top:8px;">📅 Closes ' + end + '</div>' +
+      '</div>' +
+      '<div style="text-align:center;padding:12px 0;">' +
+        '<div style="font-size:2.5rem;margin-bottom:10px;">🚫</div>' +
+        '<h3 style="color:var(--red);margin-bottom:8px;">Not Eligible</h3>' +
+        '<p style="font-size:13.5px;color:var(--text-2);">' + reason + '</p>' +
+      '</div></div>';
+  }
+
+  /* ─── Candidate selection ────────────────────────────── */
+  function onSelectCandidate(evt) {
+    var cc         = evt.currentTarget;
+    var electionId = cc.dataset.electionId;
+
+    // Deselect all in this election
+    document.querySelectorAll('#cand-grid-' + electionId + ' .candidate-card')
+      .forEach(function(el){ el.classList.remove('selected'); });
+    cc.classList.add('selected');
+
+    // Store selection per election (fixes the multi-election bug)
+    selections[electionId] = {
+      candidateId: cc.dataset.candidateId,
+      symbol:      cc.dataset.symbol,
+      name:        cc.dataset.name,
+      party:       cc.dataset.party
+    };
+
+    // Enable vote button for THIS election only
+    var btn = document.getElementById('vote-btn-' + electionId);
+    if (btn) btn.disabled = false;
+  }
+
+  /* ─── Confirm modal ──────────────────────────────────── */
+  function openConfirmModal(electionId) {
+    var sel = selections[electionId];
+    if (!sel) return;
+    activeElectionId = electionId;
+    confirmSymbol.textContent = sel.symbol;
+    confirmName.textContent   = sel.name;
+    confirmParty.textContent  = sel.party;
+    modalAlert.innerHTML = '';
+    modalConfirmBtn.disabled = false;
+    modalConfirmBtn.innerHTML = '✅ Confirm My Vote';
+    confirmModal.classList.remove('hidden');
+  }
+
+  /* ─── Submit vote ────────────────────────────────────── */
+  modalConfirmBtn.addEventListener('click', async function () {
+    var sel = selections[activeElectionId];
+    if (!sel || !activeElectionId) return;
+
+    modalConfirmBtn.disabled = true;
+    modalConfirmBtn.innerHTML = '<span class="spinner"></span>&nbsp;Submitting…';
+
+    try {
+      var res  = await fetch('/api/voter/vote', { credentials: 'include', 
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ electionId: activeElectionId, candidateId: sel.candidateId })
+      });
+      var data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+
+      closeConfirm();
+      thankyouCand.textContent = sel.symbol + ' ' + sel.name;
+      thankyouModal.classList.remove('hidden');
+      delete selections[activeElectionId];
+      activeElectionId = null;
+      await loadElections();
+    } catch (e) {
+      modalAlert.innerHTML = '<div class="alert alert-danger">❌ ' + e.message + '</div>';
+      modalConfirmBtn.disabled = false;
+      modalConfirmBtn.innerHTML = '✅ Confirm My Vote';
+    }
+  });
+
+  /* ─── Escape helper ──────────────────────────────────── */
+  function esc(s) {
+    return String(s)
+      .replace(/&/g,'&amp;').replace(/</g,'&lt;')
+      .replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+
+  init();
+})();
+</script>
+</body>
+</html>

@@ -1,1 +1,43 @@
-[]
+[
+  {
+    "id": "election-001",
+    "title": "General Election 2025",
+    "description": "Cast your vote.",
+    "startDate": "2026-03-09T14:39:53.137Z",
+    "endDate": "2026-03-16T14:39:53.137Z",
+    "status": "active",
+    "minAge": 0,
+    "maxAge": 0,
+    "candidates": [
+      {
+        "id": "c1",
+        "name": "Alice Johnson",
+        "party": "Progressive Party",
+        "symbol": "🌟",
+        "color": "#4f46e5"
+      },
+      {
+        "id": "c2",
+        "name": "Bob Williams",
+        "party": "National Alliance",
+        "symbol": "🦅",
+        "color": "#059669"
+      },
+      {
+        "id": "c3",
+        "name": "Carol Smith",
+        "party": "Peoples Front",
+        "symbol": "🌹",
+        "color": "#dc2626"
+      },
+      {
+        "id": "c4",
+        "name": "David Brown",
+        "party": "Liberty Union",
+        "symbol": "🗽",
+        "color": "#d97706"
+      }
+    ],
+    "createdAt": "2026-03-09T14:39:53.137Z"
+  }
+]

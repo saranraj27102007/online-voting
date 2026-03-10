@@ -1,11 +1,9 @@
 [
   {
-    "id": "d6523b9b-96df-47c4-8bd1-c93ed00ce5a6",
+    "id": "admin-001",
+    "name": "Chief Administrator",
     "username": "admin",
-    "password": "$2a$12$YqLoiyHcLzSJGmk3yBPoI.iNlocrN79ZlhbKrKtwUWQrwgsswBWZW",
-    "loginAttempts": 0,
-    "lockoutUntil": null,
-    "createdAt": "2026-03-07T14:23:22.056Z",
-    "lastLogin": "2026-03-07T14:23:52.713Z"
+    "password": "$2a$12$5uwKC4gRXxR6jc0e3hOzBuZYnOwQQcWWdlqcW4WQ0B1WWFreKI3KS",
+    "createdAt": "2026-03-09T14:39:53.133Z"
   }
 ]

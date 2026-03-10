@@ -1,0 +1,869 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0,user-scalable=no"/>
+<title>Voter Login — VoteSecure</title>
+<link rel="stylesheet" href="/css/style.css"/>
+<!-- face-api.js — pure JS face detection, no WASM/eval needed -->
+<script src="https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/dist/face-api.min.js" crossorigin="anonymous"></script>
+<script src="/js/face-engine.js"></script>
+<style>
+/* ── Face auth card — full-bleed camera + body padding ──── */
+.face-auth-card {
+  width: 100%; max-width: 480px;
+  background: var(--glass);
+  /* NO backdrop-filter here — it causes black video on Chrome/Windows due to GPU compositing */
+  border: 1px solid var(--border);
+  border-radius: var(--r-xl);
+  box-shadow: var(--shadow-lg);
+  position: relative; z-index: 1;
+  /* overflow must NOT be hidden at card level — breaks video rendering */
+}
+.face-auth-card::before {
+  content: ''; position: absolute;
+  top: 0; left: 0; right: 0; height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.25), transparent);
+}
+/* Camera spans full card width at top */
+.fv-cam-hero {
+  position: relative; width: 100%;
+  /* Use both aspect-ratio AND min-height for maximum browser compat */
+  aspect-ratio: 4/3;
+  min-height: 260px;
+  background: #0a0e28; overflow: hidden;
+  border-radius: var(--r-xl) var(--r-xl) 0 0;
+  /* Dedicated GPU layer — prevents black video under any compositing parent */
+  transform: translateZ(0);
+  -webkit-transform: translateZ(0);
+  will-change: transform;
+  isolation: isolate;
+}
+.fv-cam-hero video  { position:absolute; inset:0; width:100%; height:100%; object-fit:cover; display:block; }
+.fv-cam-hero canvas { position:absolute; top:0; left:0; width:100%; height:100%; pointer-events:none; }
+.fv-top-bar {
+  position:absolute; top:0; left:0; right:0;
+  padding:12px 16px;
+  display:flex; justify-content:space-between; align-items:center;
+  background:linear-gradient(to bottom,rgba(0,0,0,0.75),transparent); z-index:2;
+}
+.fv-status-bar {
+  position:absolute; bottom:0; left:0; right:0;
+  padding:14px 16px;
+  background:linear-gradient(to top,rgba(0,0,0,0.88),transparent);
+  color:#fff; font-size:13px; font-weight:600; text-align:center;
+  transition:color 0.3s; z-index:2;
+}
+.fv-lux { padding:3px 10px; border-radius:99px; font-size:10.5px; font-weight:700; color:#fff; background:rgba(0,0,0,0.55); }
+/* Scanning border states */
+.fv-cam-hero.scanning { box-shadow:inset 0 0 0 3px var(--blue),  0 0 24px rgba(79,131,255,0.4); animation:fv-scan 1.8s ease-in-out infinite; }
+.fv-cam-hero.liveness { box-shadow:inset 0 0 0 3px var(--amber), 0 0 24px rgba(255,184,48,0.4);  animation:fv-amber 1.8s ease-in-out infinite; }
+.fv-cam-hero.verified { box-shadow:inset 0 0 0 3px var(--green), 0 0 28px rgba(0,214,143,0.5); }
+.fv-cam-hero.failed   { box-shadow:inset 0 0 0 3px var(--red),   0 0 28px rgba(255,77,109,0.5); }
+@keyframes fv-scan  { 0%,100%{box-shadow:inset 0 0 0 3px var(--blue), 0 0 18px rgba(79,131,255,0.3);}  50%{box-shadow:inset 0 0 0 3px var(--blue), 0 0 44px rgba(79,131,255,0.7);} }
+@keyframes fv-amber { 0%,100%{box-shadow:inset 0 0 0 3px var(--amber),0 0 18px rgba(255,184,48,0.3);} 50%{box-shadow:inset 0 0 0 3px var(--amber),0 0 44px rgba(255,184,48,0.7);} }
+/* Card body below camera */
+.fv-body { padding:20px 28px 28px; }
+/* Result panels */
+.fv-result { text-align:center; padding:36px 28px; }
+.fv-icon {
+  width:76px; height:76px; border-radius:50%;
+  margin:0 auto 18px;
+  display:flex; align-items:center; justify-content:center; font-size:2.4rem;
+}
+.fv-icon.ok   { background:linear-gradient(135deg,#00d68f,#00b87a); box-shadow:0 10px 28px rgba(0,214,143,0.35); }
+.fv-icon.fail { background:linear-gradient(135deg,#ff4d6d,#c73050);  box-shadow:0 10px 28px rgba(255,77,109,0.35);  }
+.fv-icon.warn { background:linear-gradient(135deg,#ffb830,#e89d00);  box-shadow:0 10px 28px rgba(255,184,48,0.35);  }
+/* Match meter */
+.fv-meter { background:rgba(255,255,255,0.07); border-radius:99px; height:6px; overflow:hidden; margin:6px 0 3px; }
+.fv-meter-fill { height:100%; border-radius:99px; transition:width 0.8s cubic-bezier(0.34,1.2,0.64,1); }
+/* Step indicator dots */
+.step-dots { display:flex; gap:7px; justify-content:center; margin-bottom:26px; }
+.step-dot  { width:8px; height:8px; border-radius:50%; background:rgba(255,255,255,0.18); transition:all 0.3s; }
+.step-dot.active { background:var(--blue); box-shadow:0 0 8px var(--blue-glow); }
+.step-dot.done   { background:var(--green); }
+</style>
+</head>
+<body>
+<div class="bg-grid"></div>
+
+<nav class="navbar">
+  <a href="/" class="navbar-brand"><div class="logo-icon">🗳️</div> VoteSecure</a>
+  <a href="/register" class="btn btn-ghost btn-sm">New? Register →</a>
+</nav>
+
+<div class="auth-wrap" id="auth-wrap" style="padding-top:80px;align-items:flex-start;">
+
+  <!-- ── STEP 1 · Enter Voter ID ─────────────────────── -->
+  <div class="auth-card" id="step-id">
+    <div class="landing-orb" style="width:300px;height:300px;top:-80px;left:-80px;background:radial-gradient(circle,rgba(79,131,255,0.12) 0%,transparent 70%);"></div>
+    <div class="step-dots">
+      <div class="step-dot active"></div>
+      <div class="step-dot"></div>
+      <div class="step-dot"></div>
+    </div>
+    <div class="auth-logo" style="background:linear-gradient(135deg,var(--blue),#3a6fff);box-shadow:0 8px 24px var(--blue-glow);">🗳️</div>
+    <h1 class="auth-title">Voter Login</h1>
+    <p class="auth-sub">Enter your Voter ID — then verify your identity with face scan</p>
+    <div id="id-alert"></div>
+    <div class="form-group">
+      <label class="form-label">Voter ID</label>
+      <input id="voter-id-input" class="form-control" type="text"
+        placeholder="VTR-XXXXXX" autocomplete="off" autocorrect="off"
+        autocapitalize="characters" spellcheck="false"
+        style="font-family:'Syne',monospace;font-size:1.1rem;font-weight:700;text-align:center;letter-spacing:0.12em;text-transform:uppercase;"/>
+      <p style="font-size:11.5px;color:var(--text-3);margin-top:7px;text-align:center;">Your Voter ID was shown after registration</p>
+    </div>
+    <button class="btn btn-primary btn-block btn-lg" id="continue-btn">Continue →</button>
+    <div style="text-align:center;margin-top:16px;">
+      <a href="/" style="font-size:13px;color:var(--text-3);text-decoration:none;">← Back to Home</a>
+    </div>
+  </div>
+
+  <!-- ── STEP 2 · Confirm voter ──────────────────────── -->
+  <div class="auth-card hidden" id="step-confirm">
+    <div class="landing-orb" style="width:300px;height:300px;top:-80px;right:-80px;background:radial-gradient(circle,rgba(0,214,143,0.1) 0%,transparent 70%);"></div>
+    <div class="step-dots">
+      <div class="step-dot done"></div>
+      <div class="step-dot active"></div>
+      <div class="step-dot"></div>
+    </div>
+    <div class="auth-logo" style="background:linear-gradient(135deg,var(--green),#00b87a);box-shadow:0 8px 24px rgba(0,214,143,0.3);">✅</div>
+    <h1 class="auth-title">Voter Found</h1>
+    <p class="auth-sub">Is this you? Confirm, then complete face verification</p>
+    <div id="confirm-alert"></div>
+    <div style="display:flex;align-items:center;gap:14px;background:var(--glass-strong);border:1px solid var(--border);border-radius:var(--r-md);padding:16px;margin-bottom:18px;">
+      <div style="width:50px;height:50px;background:linear-gradient(135deg,var(--blue),var(--cyan));border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:1.5rem;flex-shrink:0;">🧑</div>
+      <div>
+        <div id="voter-name-display" style="font-family:'Syne',sans-serif;font-weight:800;font-size:1.05rem;"></div>
+        <div id="voter-id-display" style="font-family:'Syne',monospace;font-size:13px;color:var(--blue);font-weight:700;margin-top:3px;"></div>
+      </div>
+    </div>
+    <div class="alert alert-info" style="font-size:12.5px;margin-bottom:18px;">
+      🤳 <strong>Next:</strong> Camera opens for face scan — ensure good lighting and look straight ahead.
+    </div>
+    <button class="btn btn-primary btn-block btn-lg" id="face-start-btn">🔐 Start Face Verification →</button>
+    <button class="btn btn-secondary btn-block mt-8" id="back-to-id-btn">Not Me — Go Back</button>
+  </div>
+
+  <!-- ── STEP 3 · Face Verification ─────────────────── -->
+  <div class="face-auth-card hidden" id="step-face">
+
+    <!-- 3a · Loading models -->
+    <div id="fv-load-panel">
+      <div style="padding:44px 28px;text-align:center;">
+        <div style="font-size:3.2rem;margin-bottom:16px;animation:spin-slow 3s linear infinite;">🤖</div>
+        <h2 style="margin-bottom:8px;">Loading Face AI</h2>
+        <p style="color:var(--text-2);font-size:13px;margin-bottom:24px;">Downloading recognition models (~2 MB)<br>Cached after first load.</p>
+        <div class="prog-wrap" style="max-width:280px;margin:0 auto 12px;"><div class="prog-fill" id="fv-load-bar" style="width:0%;"></div></div>
+        <p id="fv-load-status" style="font-size:12px;color:var(--text-3);">Initialising…</p>
+      </div>
+    </div>
+
+    <!-- 3b · Camera + live detection -->
+    <div id="fv-cam-panel" style="display:none;">
+      <div class="fv-cam-hero scanning" id="fv-cam-hero">
+        <!-- Face placeholder — hidden once video loads -->
+        <div id="fv-placeholder" style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;background:#0a0e28;z-index:1;">
+          <div style="font-size:3rem;margin-bottom:10px;opacity:0.4;">📷</div>
+          <div style="font-size:12px;color:rgba(255,255,255,0.3);">Starting camera…</div>
+        </div>
+
+        <video id="fv-vid" autoplay muted playsinline
+          style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:block;transform:translateZ(0);-webkit-transform:translateZ(0);will-change:transform;"></video>
+        <canvas id="fv-overlay"></canvas>
+        <div class="fv-top-bar">
+          <span class="fv-lux" id="fv-lux-chip">💡 —</span>
+          <div style="display:flex;gap:6px;align-items:center;">
+            <button class="btn-icon" id="fv-cam-switch-btn" style="width:30px;height:30px;display:none;font-size:16px;" title="Switch camera">📷</button>
+            <button class="btn-icon" id="fv-flip-btn" style="width:30px;height:30px;display:none;" title="Flip camera">🔄</button>
+            <button class="btn-icon" id="fv-boost-btn" style="width:30px;height:30px;" title="Brightness boost">☀️</button>
+          </div>
+        </div>
+        <!-- Camera picker dropdown — shown when >1 camera available -->
+        <div id="fv-cam-select-wrap" style="display:none;position:absolute;top:48px;right:8px;z-index:10;background:rgba(10,14,40,0.96);border:1px solid rgba(79,131,255,0.4);border-radius:10px;padding:8px;min-width:220px;box-shadow:0 8px 24px rgba(0,0,0,0.6);">
+          <div style="font-size:10px;color:rgba(255,255,255,0.4);font-weight:700;text-transform:uppercase;letter-spacing:.08em;margin-bottom:6px;padding:0 4px;">Select Camera</div>
+          <select id="fv-cam-select" style="width:100%;background:transparent;border:none;color:#fff;font-size:12px;padding:4px;cursor:pointer;outline:none;"></select>
+        </div>
+        <div class="fv-status-bar" id="fv-status-bar">🔍 Looking for your face…</div>
+      </div>
+
+      <div class="fv-body">
+        <!-- Liveness widget -->
+        <div class="blink-indicator" id="fv-blink-indicator" style="display:none;">
+          <div class="blink-eye">👁</div>
+          <div style="flex:1;">
+            <div style="font-weight:700;font-size:13px;color:var(--amber);margin-bottom:4px;">Liveness Check — Blink naturally</div>
+            <div style="font-size:12px;color:var(--text-2);margin-bottom:6px;">Blink <strong id="fv-blinks-needed">2</strong> more time(s) to confirm you're a real person</div>
+            <div class="blink-dots">
+              <div class="blink-dot" id="fv-dot-0"></div>
+              <div class="blink-dot" id="fv-dot-1"></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="step-dots" style="margin:14px 0 4px;">
+          <div class="step-dot done"></div>
+          <div class="step-dot done"></div>
+          <div class="step-dot active"></div>
+        </div>
+        <p style="text-align:center;font-size:12px;color:var(--text-3);">Step 3 of 3 — Live face comparison</p>
+
+        <div id="fv-cam-alert" style="margin-top:10px;"></div>
+        <button class="btn btn-ghost btn-block mt-8" id="fv-cam-retry-btn" style="display:none;color:var(--amber);">🔄 Retry Camera</button>
+        <button class="btn btn-secondary btn-block mt-8" id="fv-back-from-cam-btn">← Back</button>
+      </div>
+    </div>
+
+    <!-- 3c · Analysing -->
+    <div id="fv-proc-panel" style="display:none;">
+      <div style="padding:56px 28px;text-align:center;">
+        <div style="font-size:3rem;margin-bottom:16px;">🔬</div>
+        <p id="fv-proc-txt" style="font-weight:700;font-size:15px;margin-bottom:16px;">Extracting face features…</p>
+        <div class="prog-wrap" style="max-width:240px;margin:0 auto;"><div class="prog-fill" id="fv-proc-bar" style="width:10%;"></div></div>
+        <p style="color:var(--text-3);font-size:12px;margin-top:10px;">Comparing against registered face descriptor…</p>
+      </div>
+    </div>
+
+    <!-- 3d · Failure -->
+    <div id="fv-fail-panel" style="display:none;">
+      <div class="fv-result">
+        <div class="fv-icon fail">✗</div>
+        <h2 style="color:var(--red);margin-bottom:8px;">Face Not Matched</h2>
+        <p style="color:var(--text-2);font-size:13.5px;margin-bottom:20px;" id="fv-fail-msg">Your face did not match the registered voter. Try better lighting or a different angle.</p>
+        <div style="max-width:200px;margin:0 auto 22px;">
+          <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--text-3);margin-bottom:4px;">
+            <span>Match confidence</span><span id="fv-fail-pct">0%</span>
+          </div>
+          <div class="fv-meter"><div class="fv-meter-fill" id="fv-fail-fill" style="width:0%;background:var(--red);"></div></div>
+          <div style="font-size:10.5px;color:var(--text-3);margin-top:3px;">Need ≥ 50% to verify</div>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:8px;">
+          <button class="btn btn-primary btn-block" id="fv-retry-btn">🔄 Try Again</button>
+          <a href="/" class="btn btn-ghost btn-block">← Home</a>
+        </div>
+      </div>
+    </div>
+
+    <!-- 3e · Old descriptor format — needs re-registration -->
+    <div id="fv-rereg-panel" style="display:none;">
+      <div class="fv-result">
+        <div class="fv-icon warn">⚠️</div>
+        <h2 style="color:var(--amber);margin-bottom:8px;">Re-registration Required</h2>
+        <p style="color:var(--text-2);font-size:13.5px;margin-bottom:20px;">Your account was created with an older system. Please re-register to use face verification.</p>
+        <a href="/register" class="btn btn-primary btn-block">Re-Register →</a>
+        <a href="/" class="btn btn-ghost btn-block mt-8">← Home</a>
+      </div>
+    </div>
+
+  </div><!-- .face-auth-card -->
+
+</div><!-- .auth-wrap -->
+
+<script>
+(function () {
+  'use strict';
+
+  // ── State ──────────────────────────────────────────────
+  var voterInfo    = null;   // { id, voterId, name, faceDescriptorType }
+  var fvStream     = null;
+  var fvDetActive  = false;
+  var fvDetTimer   = null;
+  var fvLiveness   = null;
+  var fvLivenessOK = false;
+  var fvCapturing  = false;
+  var fvLux        = 150;
+  var fvBoostOn    = false;
+  var fvLuxTimer   = null;
+  var isMobile        = /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent);
+  var facingMode      = 'user';
+  var fvCameras       = [];   // discovered video input devices
+  var fvSelectedCamId = null; // null = let browser choose
+
+  // ── DOM refs ───────────────────────────────────────────
+  var stepId       = document.getElementById('step-id');
+  var stepConfirm  = document.getElementById('step-confirm');
+  var stepFace     = document.getElementById('step-face');
+  var idInput      = document.getElementById('voter-id-input');
+  var continueBtn  = document.getElementById('continue-btn');
+  var fvVid        = document.getElementById('fv-vid');
+  var fvOverlay    = document.getElementById('fv-overlay');
+  var fvCamHero    = document.getElementById('fv-cam-hero');
+  var fvStatusBar  = document.getElementById('fv-status-bar');
+  var fvBlinkWrap  = document.getElementById('fv-blink-indicator');
+
+  // ── Helpers ────────────────────────────────────────────
+  function delay(ms) { return new Promise(function(r){ setTimeout(r, ms); }); }
+
+  function showAlert(elId, type, msg) {
+    var el = document.getElementById(elId);
+    if (!el) return;
+    el.innerHTML = msg ? '<div class="alert alert-'+type+'" style="margin-bottom:0;">'+msg+'</div>' : '';
+  }
+
+  function setBtn(btn, busy, label) {
+    btn.disabled  = busy;
+    btn.innerHTML = busy ? '<span class="spinner"></span>&nbsp;'+label : label;
+  }
+
+  function showStep(name) {
+    stepId.classList.add('hidden');
+    stepConfirm.classList.add('hidden');
+    stepFace.classList.add('hidden');
+    if (name === 'id')      stepId.classList.remove('hidden');
+    if (name === 'confirm') stepConfirm.classList.remove('hidden');
+    if (name === 'face')    stepFace.classList.remove('hidden');
+  }
+
+  /* Show one of the five face sub-panels */
+  function showFacePanel(p) {
+    ['load','cam','proc','fail','rereg'].forEach(function(n){
+      var el = document.getElementById('fv-'+n+'-panel');
+      if (el) el.style.display = (n === p) ? 'block' : 'none';
+    });
+  }
+
+  function setLoad(msg, pct) {
+    document.getElementById('fv-load-status').textContent = msg;
+    document.getElementById('fv-load-bar').style.width    = pct + '%';
+  }
+
+  function setProc(msg, pct) {
+    document.getElementById('fv-proc-txt').textContent = msg;
+    document.getElementById('fv-proc-bar').style.width = pct + '%';
+  }
+
+  function setStatus(msg, color) {
+    fvStatusBar.textContent = msg;
+    fvStatusBar.style.color = color || '#fff';
+  }
+
+  function updateBlinkDots(n) {
+    for (var i = 0; i < 2; i++) {
+      var d = document.getElementById('fv-dot-'+i);
+      if (d) d.className = 'blink-dot' + (i < n ? ' filled' : '');
+    }
+  }
+
+  // ══════════════════════════════════════════════════
+  // STEP 1 — Look up Voter ID
+  // ══════════════════════════════════════════════════
+  async function doLookup() {
+    var raw = idInput.value.trim().toUpperCase();
+    if (!raw) { showAlert('id-alert','danger','⚠️ Please enter your Voter ID.'); return; }
+    setBtn(continueBtn, true, 'Looking up…');
+    showAlert('id-alert','','');
+    try {
+      var res  = await fetch('/api/voter/login', { credentials: 'include', 
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({ voterId: raw })
+      });
+      var data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Voter ID not found.');
+      voterInfo = data.voter;
+      document.getElementById('voter-name-display').textContent = voterInfo.name;
+      document.getElementById('voter-id-display').textContent   = voterInfo.voterId;
+      showStep('confirm');
+    } catch(e) {
+      showAlert('id-alert','danger','❌ ' + e.message);
+      setBtn(continueBtn, false, 'Continue →');
+    }
+  }
+
+  // ══════════════════════════════════════════════════
+  // STEP 2 — Confirm → Begin face scan
+  // ══════════════════════════════════════════════════
+  function doStartFace() {
+    showStep('face');
+    launchFaceVerification();
+  }
+
+  function goBackToId() {
+    voterInfo = null;
+    showStep('id');
+    setBtn(continueBtn, false, 'Continue →');
+    showAlert('id-alert','','');
+  }
+
+  // ══════════════════════════════════════════════════
+  // STEP 3 — Face Verification
+  // ══════════════════════════════════════════════════
+  async function launchFaceVerification() {
+    fvCapturing = false; fvLivenessOK = false; fvLiveness = null;
+    fvBoostOn   = false; fvDetActive  = false;
+
+    /* ── Phase 1: Load FaceEngine models ── */
+    showFacePanel('load');
+    setLoad('Initialising…', 5);
+    var fakePct  = 5;
+    var fakeTimer = setInterval(function(){
+      if (fakePct < 80){ fakePct += Math.random()*12; setLoad('Initialising face mesh…', Math.min(fakePct,80)); }
+    }, 380);
+
+    try {
+      await FaceEngine.load();
+    } catch(err) {
+      clearInterval(fakeTimer);
+      showFacePanel('cam');
+      showAlert('fv-cam-alert','danger',
+        '❌ Could not load face AI. Check your internet connection and retry.<br><small>'+err.message+'</small>');
+      document.getElementById('fv-cam-retry-btn').style.display = 'block';
+      return;
+    }
+    clearInterval(fakeTimer);
+    setLoad('Models ready!', 100);
+    await delay(80);
+
+    /* ── Phase 2: Open camera ── */
+    showFacePanel('cam');
+    await openCamera();
+    if (!fvStream) return; // openCamera already showed the error
+
+    /* ── Phase 3: Real-time detection loop ── */
+    // Verify camera is actually showing pixels before starting detection
+    await delay(400);
+    var vidEl = document.getElementById('fv-vid');
+    if (vidEl && (vidEl.videoWidth === 0 || vidEl.paused)) {
+      // Last resort: stop and restart the track
+      fvStream.getTracks().forEach(function(t){ t.stop(); });
+      fvStream = null;
+      await delay(200);
+      await openCamera();
+      await delay(500);
+    }
+    startDetectionLoop();
+  }
+
+  /* ─── Camera management ────────────────────────── */
+  /* ── Enumerate cameras and populate selector ── */
+  async function detectFvCameras() {
+    try {
+      // Must request permission first so labels are populated
+      var tmp = await navigator.mediaDevices.getUserMedia({ video: true });
+      tmp.getTracks().forEach(function(t){ t.stop(); });
+      var devices = await navigator.mediaDevices.enumerateDevices();
+      fvCameras = devices
+        .filter(function(d){ return d.kind === 'videoinput'; })
+        .map(function(d, i){ return { deviceId: d.deviceId, label: d.label || ('Camera ' + (i+1)) }; });
+    } catch(e) { fvCameras = []; }
+  }
+
+  function score(cam) {
+    var l = (cam.label || '').toLowerCase();
+    if (/virtual|obs|snap|ivcam|android|phone|mirror|manycam/i.test(l)) return -10;
+    if (/integrated|built.?in|hd webcam|hp|laptop|internal/i.test(l)) return 10;
+    return 1;
+  }
+
+  function populateFvCamSelect() {
+    var switchBtn = document.getElementById('fv-cam-switch-btn');
+    var wrap = document.getElementById('fv-cam-select-wrap');
+    var sel  = document.getElementById('fv-cam-select');
+
+    if (!sel || fvCameras.length <= 1) {
+      if (switchBtn) switchBtn.style.display = 'none';
+      if (wrap)      wrap.style.display = 'none';
+      return;
+    }
+
+    sel.innerHTML = '';
+    var sorted = fvCameras.slice().sort(function(a,b){ return score(b) - score(a); });
+    sorted.forEach(function(cam) {
+      var opt = document.createElement('option');
+      opt.value = cam.deviceId;
+      var s = score(cam);
+      var icon = s <= -10 ? '⚠️' : s >= 10 ? '✅' : '📷';
+      opt.textContent = icon + ' ' + (cam.label || 'Camera');
+      sel.appendChild(opt);
+    });
+
+    // Auto-select best camera on first open
+    if (!fvSelectedCamId) fvSelectedCamId = sorted[0].deviceId;
+    sel.value = fvSelectedCamId;
+
+    // Show the toggle button; dropdown hidden until button clicked
+    if (switchBtn) switchBtn.style.display = 'flex';
+    if (wrap)      wrap.style.display = 'none';  // hidden until toggled
+
+    // Wire select change → switch camera
+    sel.onchange = async function() {
+      fvSelectedCamId = sel.value;
+      if (wrap) wrap.style.display = 'none';
+      await openCamera();
+      await delay(400);
+      startDetectionLoop();
+    };
+  }
+
+  // Toggle camera picker dropdown
+  document.addEventListener('DOMContentLoaded', function() {
+    var btn  = document.getElementById('fv-cam-switch-btn');
+    var wrap = document.getElementById('fv-cam-select-wrap');
+    if (btn && wrap) {
+      btn.addEventListener('click', function(e) {
+        e.stopPropagation();
+        wrap.style.display = wrap.style.display === 'none' ? 'block' : 'none';
+      });
+      document.addEventListener('click', function() {
+        if (wrap) wrap.style.display = 'none';
+      });
+    }
+  });
+
+  async function openCamera() {
+    stopCamera();
+
+    // Discover cameras on first run
+    if (!fvCameras.length) await detectFvCameras();
+    populateFvCamSelect();
+
+    // Build constraint list — prefer selected camera, fallback to any
+    var cons;
+    if (fvSelectedCamId) {
+      cons = [
+        { video: { deviceId: { exact: fvSelectedCamId }, width: { ideal: 1280 }, height: { ideal: 720 } } },
+        { video: { deviceId: { exact: fvSelectedCamId }, width: { ideal: 640 },  height: { ideal: 480 } } },
+        { video: { deviceId: { exact: fvSelectedCamId } } },
+        { video: true }
+      ];
+    } else if (isMobile) {
+      cons = [
+        { video: { facingMode: facingMode, width: { ideal: 1280 }, height: { ideal: 960 } } },
+        { video: { facingMode: facingMode } },
+        { video: true }
+      ];
+    } else {
+      cons = [
+        { video: { width: { ideal: 1280 }, height: { ideal: 720 } } },
+        { video: { width: { ideal: 640  }, height: { ideal: 480 } } },
+        { video: true }
+      ];
+    }
+
+    for (var i = 0; i < cons.length; i++) {
+      try { fvStream = await navigator.mediaDevices.getUserMedia(cons[i]); break; } catch(e) {}
+    }
+
+    if (!fvStream) {
+      showAlert('fv-cam-alert', 'danger',
+        '❌ Camera not found or access denied.<br>' +
+        'Allow camera permission and close other apps using the camera, then click <strong>Retry Camera</strong>.');
+      document.getElementById('fv-cam-retry-btn').style.display = 'block';
+      return;
+    }
+
+    // Re-grab the video element in case DOM was re-rendered
+    fvVid = document.getElementById('fv-vid');
+    if (!fvVid) { console.error('fv-vid element missing'); return; }
+
+    // Detach any old stream first
+    fvVid.pause();
+    fvVid.srcObject = null;
+    await new Promise(function(r){ setTimeout(r, 80); });
+
+    // Attach new stream
+    fvVid.srcObject = fvStream;
+    applyBoost();
+
+    // Wait for metadata (videoWidth/videoHeight become valid)
+    await new Promise(function(resolve) {
+      if (fvVid.readyState >= 2) { resolve(); return; }
+      var done = false;
+      function finish(){ if (!done){ done=true; resolve(); } }
+      fvVid.onloadeddata     = finish;
+      fvVid.onloadedmetadata = finish;
+      fvVid.oncanplay        = finish;
+      setTimeout(finish, 5000); // hard fallback
+    });
+
+    // Play — handle autoplay policy
+    try {
+      await fvVid.play();
+    } catch(e) {
+      // Muted autoplay always allowed — set muted and retry
+      fvVid.muted = true;
+      try { await fvVid.play(); } catch(e2) { console.warn('play failed:', e2); }
+    }
+
+    // Wait for actual pixels to render
+    await new Promise(function(r){ setTimeout(r, 400); });
+
+    // Hide placeholder — video should be rendering now
+    var ph = document.getElementById('fv-placeholder');
+    if (ph) ph.style.display = 'none';
+
+    // Verify we actually have a live image
+    if (fvVid.videoWidth === 0 || fvVid.videoHeight === 0) {
+      // Video dimensions still 0 — force a reflow
+      fvVid.style.display = 'none';
+      await new Promise(function(r){ setTimeout(r, 100); });
+      fvVid.style.display = 'block';
+      await new Promise(function(r){ setTimeout(r, 400); });
+    }
+
+    document.getElementById('fv-flip-btn').style.display = isMobile ? 'flex' : 'none';
+    fvLuxTimer = setInterval(measureLux, 900);
+  }
+
+  function stopCamera() {
+    stopDetection();
+    clearInterval(fvLuxTimer); fvLuxTimer = null;
+    if (fvStream){ fvStream.getTracks().forEach(function(t){ t.stop(); }); fvStream = null; }
+    fvVid.srcObject = null;
+    var ph = document.getElementById('fv-placeholder');
+    if (ph) ph.style.display = 'flex'; // show placeholder again
+  }
+
+  function applyBoost() {
+    var v = document.getElementById('fv-vid');
+    if (!v) return;
+    fvVid = v; // keep reference fresh
+    v.style.filter = fvBoostOn ? 'brightness(2.5) contrast(1.6)' : 'brightness(1.6) contrast(1.2)';
+  }
+
+  function measureLux() {
+    try {
+      var c = document.createElement('canvas'); c.width=80; c.height=60;
+      var vEl = document.getElementById('fv-vid') || fvVid;
+      var ctx = c.getContext('2d'); ctx.drawImage(vEl,0,0,80,60);
+      var px = ctx.getImageData(0,0,80,60).data, s=0;
+      for (var i=0;i<px.length;i+=16) s+=(px[i]+px[i+1]+px[i+2])/3;
+      fvLux = s/(px.length/16);
+      var chip = document.getElementById('fv-lux-chip');
+      if (chip) chip.textContent = fvLux<50?'🌑 Very Dark':fvLux<90?'🌙 Low Light':fvLux<160?'💡 OK':'☀️ Good Light';
+    } catch(e){}
+  }
+
+  /* ─── Real-time face detection loop ────────────── */
+  function startDetectionLoop() {
+    stopDetection();
+    fvDetActive  = true;
+    fvCapturing  = false;
+    fvLivenessOK = false;
+    fvLiveness   = FaceEngine.LivenessDetector(2); // 2 blinks required
+
+    fvBlinkWrap.style.display   = 'none';
+    fvCamHero.className         = 'fv-cam-hero scanning';
+    showAlert('fv-cam-alert','','');
+    setStatus('🔍 Look straight at camera — keep face centred & chin up', '#fff');
+    var _fvLastFrame   = 0;
+    var _FV_FRAME_MS   = 100;
+    var _fvNoFace      = 0;
+    var _fvManual      = false;
+
+    // Failsafe: enable manual verify button after 8s of no detection
+    var _fvFailsafe = setTimeout(function() {
+      if (!fvLivenessOK && fvDetActive) {
+        _fvManual = true;
+        document.getElementById('fv-verify-btn') && (document.getElementById('fv-verify-btn').disabled = false);
+        setStatus('⚠️ Detection struggling — click Verify Face to continue manually', 'var(--amber)');
+      }
+    }, 8000);
+
+    (async function loop(ts){
+      if (!fvDetActive || fvCapturing) return;
+      if ((ts || 0) - _fvLastFrame < _FV_FRAME_MS) { fvDetTimer = requestAnimationFrame(loop); return; }
+      _fvLastFrame = ts || 0;
+
+      try {
+        // Guard: if video not ready yet, skip this frame
+        if (!fvVid.videoWidth || !fvVid.videoHeight || fvVid.readyState < 2) {
+          if (fvDetActive && !fvCapturing) fvDetTimer = requestAnimationFrame(loop);
+          return;
+        }
+        fvVid = document.getElementById('fv-vid') || fvVid; // keep fresh
+        var result = await FaceEngine.detect(fvVid);
+
+        if (!fvDetActive) return; // stopped while awaiting
+
+        if (!result) {
+          /* ── No face ── */
+          _fvNoFace++;
+          FaceEngine.clearOverlay(fvOverlay);
+          fvCamHero.className       = 'fv-cam-hero scanning';
+          fvBlinkWrap.style.display = 'none';
+          if (_fvNoFace < 15)      setStatus('🔍 Searching — look directly at camera', '#fff');
+          else if (_fvNoFace < 40) setStatus('💡 No face found — better lighting or move closer', '#fff');
+          else                     setStatus('⚠️ Still searching — lift chin, face camera fully', 'var(--amber)');
+
+        } else if (!fvLivenessOK) {
+          /* ── Face found, liveness in progress ── */
+          _fvNoFace = 0;
+          var blinks = fvLiveness.update(result.landmarks);
+          var fvCalibrated = fvLiveness.isCalibrated ? fvLiveness.isCalibrated() : true;
+          FaceEngine.drawOverlay(fvOverlay, fvVid, result, 'liveness');
+          fvCamHero.className = 'fv-cam-hero liveness';
+          if (!fvCalibrated) {
+            fvBlinkWrap.style.display = 'none';
+            setStatus('👁  Face detected! Keep eyes open 1 second to calibrate…', 'var(--amber)');
+          } else {
+            updateBlinkDots(blinks);
+            fvBlinkWrap.style.display = 'flex';
+            document.getElementById('fv-blinks-needed').textContent = Math.max(0, 2 - blinks);
+            setStatus('👁  Blink '+ Math.max(0,2-blinks) +' more time'+(2-blinks!==1?'s':'')+' slowly and clearly', 'var(--amber)');
+          }
+
+          if (fvLiveness.complete()) {
+            fvLivenessOK            = true;
+            fvBlinkWrap.style.display = 'none';
+            FaceEngine.drawOverlay(fvOverlay, fvVid, result, 'verified');
+            fvCamHero.className = 'fv-cam-hero verified';
+            setStatus('✅ Liveness confirmed — capturing face…', 'var(--green)');
+            await delay(150);
+            if (fvDetActive && !fvCapturing) captureAndVerify();
+            return;
+          }
+
+        } else {
+          /* ── Liveness done, waiting for capture ── */
+          FaceEngine.drawOverlay(fvOverlay, fvVid, result, 'verified');
+          fvCamHero.className = 'fv-cam-hero verified';
+          setStatus('✅ Capturing…', 'var(--green)');
+        }
+      } catch(e) {
+        console.warn('FaceEngine frame error:', e.message);
+      }
+
+      if (fvDetActive && !fvCapturing) fvDetTimer = requestAnimationFrame(loop);
+    })();
+  }
+
+  function stopDetection() {
+    fvDetActive = false;
+    if (fvDetTimer) { cancelAnimationFrame(fvDetTimer); fvDetTimer = null; }
+    if (typeof _fvFailsafe !== 'undefined') clearTimeout(_fvFailsafe);
+    if (fvOverlay) FaceEngine.clearOverlay(fvOverlay);
+  }
+
+  /* ─── Capture descriptor + server comparison ─── */
+  async function captureAndVerify() {
+    if (fvCapturing) return;
+    fvCapturing = true;
+    stopDetection();
+    showFacePanel('proc');
+    setProc('Detecting face at capture moment…', 20);
+
+    try {
+      // Capture the live frame and extract 128-D descriptor for server-side comparison
+      setProc('Capturing face for verification…', 40);
+      var fvVid = document.getElementById('fv-vid');
+      var track = fvStream && fvStream.getVideoTracks()[0];
+      var settings = track ? track.getSettings() : {};
+      var isFront = !(settings.facingMode === 'environment');
+      var capturedFrame = FaceEngine.captureFrame(fvVid, /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent), isFront);
+
+      setProc('Extracting face features…', 55);
+      // Use detectWithDescriptor for face match — gets 128-D descriptor
+      var snapResult = await FaceEngine.detectWithDescriptor(capturedFrame);
+      var descriptor = snapResult && snapResult.descriptor ? Array.from(snapResult.descriptor) : null;
+
+      setProc('Liveness confirmed, verifying identity…', 70);
+      stopCamera(); // camera no longer needed
+
+      var res = await fetch('/api/voter/face-verify', { credentials: 'include',
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          voterId:           voterInfo.voterId,
+          livenessConfirmed: true,
+          faceDescriptor:    descriptor   // null for blink_liveness voters, 128-D array for faceapi voters
+        })
+      });
+      var data = await res.json();
+      setProc('Verifying identity…', 92);
+      await delay(100);
+
+      /* Old descriptor format — needs re-registration */
+      if (data.needsReregistration) {
+        showFacePanel('rereg');
+        return;
+      }
+
+      if (!res.ok || !data.success) {
+        /* ── Face did not match ── */
+        var dist     = typeof data.distance === 'number' ? data.distance : 1.0;
+        var matchPct = Math.round(Math.max(0, Math.min(100, (1 - dist / 0.5) * 100)));
+        showFacePanel('fail');
+        document.getElementById('fv-fail-msg').textContent =
+          data.message || 'Your face does not match the registered voter. Try better lighting.';
+        document.getElementById('fv-fail-pct').textContent = matchPct + '%';
+        var fill = document.getElementById('fv-fail-fill');
+        if (fill) setTimeout(function(){ fill.style.width = matchPct + '%'; }, 100);
+        fvCapturing = false;
+        return;
+      }
+
+      /* ✅ Matched — session set server-side → redirect */
+      setProc('✅ Identity confirmed!', 100);
+      await delay(200);
+      location.href = '/vote';
+
+    } catch(e) {
+      fvCapturing = false;
+      showFacePanel('cam');
+      showAlert('fv-cam-alert','danger','❌ ' + e.message);
+      fvLivenessOK = false; fvLiveness = null;
+      if (fvStream) {
+        startDetectionLoop();
+      } else {
+        // Camera was already stopped — need to reopen
+        document.getElementById('fv-cam-retry-btn').style.display = 'block';
+      }
+    }
+  }
+
+  /* ─── Retry after failure ── */
+  function retryVerification() {
+    fvCapturing = false; fvLivenessOK = false; fvLiveness = null;
+    launchFaceVerification();
+  }
+
+  // ══════════════════════════════════════════════════
+  // EVENT LISTENERS (no inline handlers)
+  // ══════════════════════════════════════════════════
+  continueBtn.addEventListener('click', doLookup);
+
+  document.getElementById('face-start-btn').addEventListener('click', doStartFace);
+  document.getElementById('back-to-id-btn').addEventListener('click', goBackToId);
+
+  document.getElementById('fv-flip-btn').addEventListener('click', function(){
+    facingMode = facingMode === 'user' ? 'environment' : 'user';
+    stopCamera();
+    openCamera().then(function(){ if (fvStream) startDetectionLoop(); });
+  });
+
+  document.getElementById('fv-boost-btn').addEventListener('click', function(){
+    fvBoostOn = !fvBoostOn;
+    this.style.background = fvBoostOn ? 'rgba(79,131,255,0.6)' : '';
+    applyBoost();
+  });
+
+
+  document.getElementById('fv-cam-retry-btn').addEventListener('click', function(){
+    this.style.display = 'none';
+    showAlert('fv-cam-alert','','');
+    fvSelectedCamId = null; fvCameras = [];
+    openCamera().then(function(){
+      if (fvStream) delay(400).then(function(){ startDetectionLoop(); });
+    });
+  });
+
+  document.getElementById('fv-back-from-cam-btn').addEventListener('click', function(){
+    stopCamera();
+    fvCapturing = false;
+    showStep('confirm');
+  });
+
+  document.getElementById('fv-retry-btn').addEventListener('click', retryVerification);
+
+  document.addEventListener('keydown', function(e){
+    if (e.key !== 'Enter') return;
+    if (!stepId.classList.contains('hidden')) doLookup();
+  });
+
+  window.addEventListener('beforeunload', stopCamera);
+
+})();
+</script>
+</body>
+</html>
