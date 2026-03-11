@@ -3,8 +3,8 @@
     "id": "election-001",
     "title": "General Election 2025",
     "description": "Cast your vote.",
-    "startDate": "2026-03-09T14:39:53.137Z",
-    "endDate": "2026-03-16T14:39:53.137Z",
+    "startDate": "2026-03-11T14:02:11.827Z",
+    "endDate": "2026-03-18T14:02:11.828Z",
     "status": "active",
     "minAge": 0,
     "maxAge": 0,
@@ -38,6 +38,6 @@
         "color": "#d97706"
       }
     ],
-    "createdAt": "2026-03-09T14:39:53.137Z"
+    "createdAt": "2026-03-11T14:02:11.828Z"
   }
 ]
