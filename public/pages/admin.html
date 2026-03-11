@@ -35,6 +35,7 @@
       <button class="sidebar-btn" data-tab="voters"><span class="s-icon">👥</span> Voters</button>
       <button class="sidebar-btn" data-tab="votelog"><span class="s-icon">📋</span> Vote Log</button>
       <button class="sidebar-btn" data-tab="create"><span class="s-icon">➕</span> New Election</button>
+      <button class="sidebar-btn" data-tab="security"><span class="s-icon">🛡️</span> Security</button>
     </div>
     <div class="sidebar-section" style="margin-top:auto;padding-top:16px;border-top:1px solid var(--border);">
       <button class="sidebar-btn" data-tab="settings"><span class="s-icon">⚙️</span> Settings</button>
@@ -180,6 +181,59 @@
       </div>
     </div>
 
+    <!-- Security tab -->
+    <div id="tab-security" class="tab-content">
+      <div class="page-header"><h2>🛡️ Security Dashboard</h2><p>Blockchain integrity · Duplicate detection · Attack monitoring</p></div>
+
+      <!-- Summary cards -->
+      <div class="stats-grid" id="security-summary-grid" style="margin-bottom:24px;">
+        <div style="padding:20px;color:var(--text-2);" id="sec-loading">Loading security status…</div>
+      </div>
+
+      <!-- Blockchain panel -->
+      <div class="card" style="margin-bottom:20px;">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">
+          <div>
+            <h3 style="margin:0 0 4px;">🔗 Blockchain Vote Ledger</h3>
+            <p style="font-size:12.5px;color:var(--text-3);margin:0;">Every vote is cryptographically linked. Tampering any block invalidates all subsequent blocks.</p>
+          </div>
+          <button class="btn btn-secondary" id="verify-chain-btn" style="flex-shrink:0;">🔍 Verify Now</button>
+        </div>
+        <div id="chain-status-bar" style="padding:14px 16px;border-radius:var(--r-md);margin-bottom:14px;font-size:13.5px;font-weight:600;">
+          Checking…
+        </div>
+        <div id="chain-blocks-wrap" style="display:none;">
+          <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--text-3);margin-bottom:8px;">Recent Blocks</div>
+          <div id="chain-blocks-table" style="font-size:12px;overflow-x:auto;"></div>
+        </div>
+      </div>
+
+      <!-- Duplicate voters panel -->
+      <div class="card" style="margin-bottom:20px;">
+        <div style="margin-bottom:14px;">
+          <h3 style="margin:0 0 4px;">👥 Duplicate Voter Alerts</h3>
+          <p style="font-size:12.5px;color:var(--text-3);margin:0;">AI face comparison blocks same person registering twice.</p>
+        </div>
+        <div id="dup-alerts-table">
+          <div style="padding:20px;color:var(--text-3);text-align:center;font-size:13px;">Loading…</div>
+        </div>
+      </div>
+
+      <!-- Security events log -->
+      <div class="card">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">
+          <div>
+            <h3 style="margin:0 0 4px;">🚨 Security Events</h3>
+            <p style="font-size:12.5px;color:var(--text-3);margin:0;">Deepfake rejections, CSRF blocks, chain tampering, replay attacks.</p>
+          </div>
+          <button class="btn btn-secondary" id="refresh-events-btn">🔄 Refresh</button>
+        </div>
+        <div id="security-events-table">
+          <div style="padding:20px;color:var(--text-3);text-align:center;font-size:13px;">Loading…</div>
+        </div>
+      </div>
+    </div>
+
     <!-- Settings tab -->
     <div id="tab-settings" class="tab-content">
       <div class="page-header"><h2>Settings</h2><p>Manage your admin account</p></div>
@@ -298,20 +352,192 @@
     else                           { p.innerHTML = '📋 <strong>No age restriction</strong> — all ages can vote'; p.style.background='rgba(255,255,255,0.05)'; p.style.color='var(--text-3)'; }
   }
 
+  /* ─── Emoji picker pool ──────────────────────────────── */
+  var EMOJI_POOL = [
+    '🌟','🦅','🌹','🗽','🔵','🟢','🔴','🟡','🟣','⚡',
+    '🌊','🌿','🌏','🏛️','🕊️','🔥','💎','🌈','⭐','🦁',
+    '🐯','🦊','🌻','🍀','🏆','🎯','🚀','🛡️','⚖️','🌙'
+  ];
+
+  function openEmojiPicker(btn, onPick) {
+    // Remove any existing picker
+    var old = document.getElementById('emoji-picker-popup');
+    if (old) { old.remove(); if (old._triggerBtn === btn) return; }
+
+    var popup = document.createElement('div');
+    popup.id = 'emoji-picker-popup';
+    popup._triggerBtn = btn;
+    popup.style.cssText = [
+      'position:fixed;z-index:9999;background:var(--surface,#1a2744);',
+      'border:1px solid var(--border,rgba(255,255,255,.12));border-radius:12px;',
+      'padding:12px;display:grid;grid-template-columns:repeat(6,36px);gap:4px;',
+      'box-shadow:0 8px 32px rgba(0,0,0,.6);'
+    ].join('');
+
+    EMOJI_POOL.forEach(function(em) {
+      var b = document.createElement('button');
+      b.type = 'button';
+      b.textContent = em;
+      b.style.cssText = 'font-size:1.35rem;width:36px;height:36px;border:none;background:transparent;cursor:pointer;border-radius:6px;transition:background .15s;';
+      b.addEventListener('mouseenter', function(){ b.style.background='rgba(255,255,255,.12)'; });
+      b.addEventListener('mouseleave', function(){ b.style.background='transparent'; });
+      b.addEventListener('click', function(e) {
+        e.stopPropagation();
+        onPick(em);
+        popup.remove();
+      });
+      popup.appendChild(b);
+    });
+
+    document.body.appendChild(popup);
+    // Position near button
+    var rect = btn.getBoundingClientRect();
+    var pw = 6*40, ph = Math.ceil(EMOJI_POOL.length/6)*40 + 24;
+    var left = Math.min(rect.left, window.innerWidth - pw - 8);
+    var top  = rect.bottom + 4;
+    if (top + ph > window.innerHeight) top = rect.top - ph - 4;
+    popup.style.left = left + 'px';
+    popup.style.top  = top  + 'px';
+
+    function dismiss(e) { if (!popup.contains(e.target) && e.target !== btn) { popup.remove(); document.removeEventListener('click', dismiss); } }
+    setTimeout(function(){ document.addEventListener('click', dismiss); }, 0);
+  }
+
   /* ─── Add candidate row ──────────────────────────────── */
   document.getElementById('add-candidate-btn').addEventListener('click', addCandidateRow);
 
   function addCandidateRow() {
     var div = document.createElement('div');
-    div.style.cssText = 'display:flex;gap:8px;align-items:center;background:var(--glass);border:1px solid var(--border);padding:10px;border-radius:var(--r-xs);margin-bottom:8px;';
-    div.innerHTML =
-      '<input type="text" placeholder="🌟" class="c-sym form-control" style="width:60px;text-align:center;font-size:1.3rem;padding:8px;"/>' +
-      '<input type="text" placeholder="Full Name *" class="c-name form-control" style="flex:1;"/>' +
-      '<input type="text" placeholder="Party" class="c-party form-control" style="flex:1;"/>' +
-      '<button type="button" class="btn-icon remove-cand-btn" style="flex-shrink:0;color:var(--red);">✕</button>';
-    div.querySelector('.remove-cand-btn').addEventListener('click', function () {
-      div.remove();
+    div.style.cssText = [
+      'background:var(--glass);border:1px solid var(--border);',
+      'border-radius:10px;margin-bottom:10px;overflow:hidden;'
+    ].join('');
+
+    /* ── top row: symbol + name + party + remove ── */
+    div.innerHTML = [
+      '<div style="display:flex;gap:8px;align-items:center;padding:10px 10px 0;">',
+
+        /* Symbol button (emoji or image preview) */
+        '<div style="position:relative;flex-shrink:0;">',
+          '<button type="button" class="c-sym-btn" title="Choose emoji or upload image"',
+          ' style="width:54px;height:54px;border-radius:8px;border:2px dashed var(--border);',
+          'background:var(--glass);cursor:pointer;font-size:1.6rem;display:flex;',
+          'align-items:center;justify-content:center;overflow:hidden;padding:0;',
+          'transition:border-color .2s;">',
+            '<span class="c-sym-emoji">🌟</span>',
+            '<img class="c-sym-img" style="display:none;width:100%;height:100%;object-fit:cover;" alt=""/>',
+          '</button>',
+        '</div>',
+
+        /* Name + Party */
+        '<input type="text" placeholder="Full Name *" class="c-name form-control" style="flex:1;"/>',
+        '<input type="text" placeholder="Party / Alliance" class="c-party form-control" style="flex:1;"/>',
+        '<button type="button" class="remove-cand-btn" title="Remove candidate"',
+        ' style="flex-shrink:0;width:32px;height:32px;border-radius:50%;border:none;',
+        'background:rgba(255,77,109,.15);color:var(--red);font-size:1rem;cursor:pointer;',
+        'display:flex;align-items:center;justify-content:center;transition:background .2s;">✕</button>',
+      '</div>',
+
+      /* ── symbol options row ── */
+      '<div style="display:flex;gap:6px;align-items:center;padding:8px 10px 10px;border-top:1px solid var(--border);margin-top:10px;">',
+        '<span style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--text-3);margin-right:2px;">Symbol:</span>',
+
+        /* Emoji picker trigger */
+        '<button type="button" class="c-open-emoji btn btn-secondary btn-sm"',
+        ' style="font-size:12px;padding:4px 10px;">😊 Emoji</button>',
+
+        /* Type emoji directly */
+        '<input type="text" class="c-sym-text form-control" placeholder="or type…"',
+        ' maxlength="4" style="width:62px;text-align:center;font-size:1.1rem;padding:4px 6px;"/>',
+
+        /* Upload image */
+        '<label class="btn btn-secondary btn-sm" style="cursor:pointer;font-size:12px;padding:4px 10px;margin:0;">',
+          '📷 Upload',
+          '<input type="file" class="c-img-file" accept="image/png,image/jpeg,image/webp,image/gif"',
+          ' style="display:none;"/>',
+        '</label>',
+
+        /* Hidden: stores current symbol value */
+        '<input type="hidden" class="c-sym" value="🌟"/>',
+        /* Hidden: stores base64 image (empty = use emoji) */
+        '<input type="hidden" class="c-img" value=""/>',
+
+        '<span class="c-sym-preview" style="margin-left:auto;font-size:11.5px;color:var(--text-3);">Symbol: 🌟</span>',
+      '</div>'
+    ].join('');
+
+    /* ── wire up interactions ── */
+    var symBtn    = div.querySelector('.c-sym-btn');
+    var symEmoji  = div.querySelector('.c-sym-emoji');
+    var symImgEl  = div.querySelector('.c-sym-img');
+    var symHidden = div.querySelector('.c-sym');
+    var imgHidden = div.querySelector('.c-img');
+    var symText   = div.querySelector('.c-sym-text');
+    var symPrev   = div.querySelector('.c-sym-preview');
+    var fileInput = div.querySelector('.c-img-file');
+    var emojiBtn  = div.querySelector('.c-open-emoji');
+
+    function setEmoji(em) {
+      symHidden.value = em;
+      imgHidden.value = '';
+      symEmoji.textContent = em;
+      symEmoji.style.display = '';
+      symImgEl.style.display = 'none';
+      symBtn.style.borderStyle = 'dashed';
+      symPrev.textContent = 'Symbol: ' + em;
+    }
+
+    function setImage(b64, name) {
+      imgHidden.value = b64;
+      symHidden.value = symText.value.trim() || '📷';
+      symImgEl.src = b64;
+      symEmoji.style.display = 'none';
+      symImgEl.style.display = 'block';
+      symBtn.style.borderStyle = 'solid';
+      symBtn.style.borderColor = 'var(--blue)';
+      symPrev.textContent = '📷 ' + (name || 'Image');
+    }
+
+    // Emoji picker popup
+    emojiBtn.addEventListener('click', function(e) {
+      e.stopPropagation();
+      openEmojiPicker(emojiBtn, function(em) {
+        symText.value = em;
+        setEmoji(em);
+      });
     });
+
+    // Click symbol button — also opens emoji picker
+    symBtn.addEventListener('click', function(e) {
+      e.stopPropagation();
+      if (imgHidden.value) { imgHidden.value=''; setEmoji(symHidden.value||'🌟'); return; }
+      openEmojiPicker(symBtn, function(em) {
+        symText.value = em;
+        setEmoji(em);
+      });
+    });
+
+    // Typing emoji directly
+    symText.addEventListener('input', function() {
+      var v = symText.value.trim();
+      if (v) setEmoji(v);
+    });
+
+    // File upload
+    fileInput.addEventListener('change', function() {
+      var file = fileInput.files[0];
+      if (!file) return;
+      if (file.size > 2 * 1024 * 1024) {
+        alert('Image must be under 2 MB.'); fileInput.value=''; return;
+      }
+      var reader = new FileReader();
+      reader.onload = function(e) { setImage(e.target.result, file.name); };
+      reader.readAsDataURL(file);
+    });
+
+    // Remove row
+    div.querySelector('.remove-cand-btn').addEventListener('click', function() { div.remove(); });
+
     document.getElementById('candidate-list').appendChild(div);
   }
 
@@ -335,7 +561,8 @@
       var name   = item.querySelector('.c-name').value.trim();
       var symbol = item.querySelector('.c-sym').value.trim() || '🔵';
       var party  = item.querySelector('.c-party').value.trim() || 'Independent';
-      if (name) candidates.push({ name: name, symbol: symbol, party: party });
+      var img    = item.querySelector('.c-img') ? item.querySelector('.c-img').value : '';
+      if (name) candidates.push({ name: name, symbol: symbol, party: party, image: img });
     });
 
     if (!title)                           { alertEl.innerHTML = '<div class="alert alert-danger">Election title is required.</div>'; return; }
@@ -543,7 +770,9 @@
         var medals = ['🥇','🥈','🥉'];
         return '<div class="result-bar">' +
           '<div class="result-bar-header">' +
-            '<span class="result-bar-name">' + (medals[i]||'') + ' ' + c.symbol + ' ' + esc(c.name) + ' <span style="font-size:11.5px;color:var(--text-3);">' + esc(c.party) + '</span></span>' +
+            '<span class="result-bar-name">' + (medals[i]||'') + ' ' +
+            (c.image ? '<img src="' + c.image + '" style="width:22px;height:22px;border-radius:50%;object-fit:cover;vertical-align:middle;margin-right:4px;"/>' : c.symbol + ' ') +
+            esc(c.name) + ' <span style="font-size:11.5px;color:var(--text-3);">' + esc(c.party) + '</span></span>' +
             '<span class="result-bar-info">' + c.votes + ' · <strong style="color:var(--blue);">' + pct + '%</strong></span>' +
           '</div>' +
           '<div class="result-bar-track"><div class="result-bar-fill" style="width:' + pct + '%;background:' + c.color + ';"></div></div>' +
@@ -632,7 +861,9 @@
         var pct = total ? Math.round((c.votes/total)*100) : 0;
         return '<div class="result-bar" style="margin-bottom:18px;">' +
           '<div class="result-bar-header">' +
-            '<span class="result-bar-name" style="font-size:14.5px;">' + (medals[i]||'') + ' ' + c.symbol + ' ' + esc(c.name) + '</span>' +
+            '<span class="result-bar-name" style="font-size:14.5px;">' + (medals[i]||'') + ' ' +
+            (c.image ? '<img src="' + c.image + '" style="width:24px;height:24px;border-radius:50%;object-fit:cover;vertical-align:middle;margin-right:5px;"/>' : c.symbol + ' ') +
+            esc(c.name) + '</span>' +
             '<div style="text-align:right;">' +
               '<div style="font-weight:800;color:' + c.color + ';font-size:1.1rem;">' + pct + '%</div>' +
               '<div style="font-size:12px;color:var(--text-3);">' + c.votes + ' votes</div>' +
@@ -760,6 +991,159 @@
   ['pw-current','pw-new','pw-confirm'].forEach(function(id) {
     document.getElementById(id).addEventListener('keydown', function(e) {
       if (e.key === 'Enter') document.getElementById('pw-change-btn').click();
+    });
+  });
+
+  /* ════════════════════════════════════════════════════
+     SECURITY DASHBOARD
+  ════════════════════════════════════════════════════ */
+
+  async function loadSecurityDashboard() {
+    await Promise.all([loadSecuritySummary(), loadChainStatus(), loadDupAlerts(), loadSecurityEvents()]);
+  }
+
+  async function loadSecuritySummary() {
+    try {
+      const r = await apiFetch('/api/admin/security/summary');
+      const g = document.getElementById('security-summary-grid');
+      if (!r.ok) { g.innerHTML = '<div style="padding:20px;color:var(--red);">Failed to load security status.</div>'; return; }
+      const d = await r.json();
+
+      const chainOk  = d.blockchain.valid;
+      const chainCol = chainOk ? 'var(--green)' : 'var(--red)';
+      const chainIcon = chainOk ? '✅' : '⛔';
+
+      g.innerHTML =
+        statCard(chainIcon + ' Blockchain', chainOk ? 'Verified' : 'TAMPERED', chainCol, d.blockchain.blocks + ' blocks') +
+        statCard('👥 Duplicates Blocked', d.duplicates.total, 'var(--amber)', d.duplicates.last24h + ' in last 24h') +
+        statCard('🚫 Deepfake Rejections', d.attacks.deepfakeRejections, 'var(--blue)', 'Since server start') +
+        statCard('🛡️ CSRF Blocked', d.attacks.csrfBlocked, 'var(--purple, #a855f7)', 'Since server start');
+    } catch(e) {}
+  }
+
+  function statCard(label, value, color, sub) {
+    return '<div class="stat-card"><div class="stat-label">' + label + '</div>' +
+      '<div class="stat-value" style="color:' + color + '">' + value + '</div>' +
+      '<div style="font-size:11.5px;color:var(--text-3);margin-top:4px;">' + sub + '</div></div>';
+  }
+
+  async function loadChainStatus() {
+    const bar    = document.getElementById('chain-status-bar');
+    const wrap   = document.getElementById('chain-blocks-wrap');
+    const table  = document.getElementById('chain-blocks-table');
+    try {
+      const r = await apiFetch('/api/admin/blockchain/status');
+      const d = await r.json();
+      if (d.valid) {
+        bar.style.background = 'rgba(0,214,143,0.1)';
+        bar.style.border     = '1px solid rgba(0,214,143,0.3)';
+        bar.style.color      = 'var(--green)';
+        bar.textContent      = '✅ Chain VALID — ' + d.length + ' blocks · Difficulty ' + d.difficulty + ' · Tip: ' + (d.tip?.blockHash?.slice(0,20) || '—') + '…';
+      } else {
+        bar.style.background = 'rgba(255,77,109,0.1)';
+        bar.style.border     = '1px solid rgba(255,77,109,0.3)';
+        bar.style.color      = 'var(--red)';
+        bar.textContent      = '⛔ INTEGRITY FAILURE at block ' + d.failedAt + ': ' + d.error;
+      }
+
+      const br = await apiFetch('/api/admin/blockchain/blocks');
+      const bd = await br.json();
+      if (bd.blocks && bd.blocks.length > 0) {
+        wrap.style.display = 'block';
+        table.innerHTML = '<table style="width:100%;border-collapse:collapse;">' +
+          '<tr style="color:var(--text-3);font-size:11px;text-transform:uppercase;">' +
+          '<th style="padding:6px 8px;text-align:left;">Block</th>' +
+          '<th style="padding:6px 8px;text-align:left;">Time</th>' +
+          '<th style="padding:6px 8px;text-align:left;">Election</th>' +
+          '<th style="padding:6px 8px;text-align:left;">Block Hash</th>' +
+          '<th style="padding:6px 8px;text-align:left;">Prev Hash</th></tr>' +
+          bd.blocks.slice(-10).reverse().map(function(b) {
+            return '<tr style="border-top:1px solid var(--border);font-size:11.5px;">' +
+              '<td style="padding:7px 8px;font-weight:700;color:var(--blue);">#' + b.blockIndex + '</td>' +
+              '<td style="padding:7px 8px;color:var(--text-2);">' + new Date(b.timestamp).toLocaleTimeString() + '</td>' +
+              '<td style="padding:7px 8px;color:var(--text-2);">' + b.electionId.slice(0,12) + '…</td>' +
+              '<td style="padding:7px 8px;font-family:monospace;color:var(--cyan,#22d3ee);">' + b.blockHash + '</td>' +
+              '<td style="padding:7px 8px;font-family:monospace;color:var(--text-3);">' + b.previousHash + '</td></tr>';
+          }).join('') + '</table>';
+      }
+    } catch(e) { bar.textContent = 'Error loading chain status.'; }
+  }
+
+  async function loadDupAlerts() {
+    const el = document.getElementById('dup-alerts-table');
+    try {
+      const r = await apiFetch('/api/admin/security/duplicates');
+      const d = await r.json();
+      if (!d.alerts || d.alerts.length === 0) {
+        el.innerHTML = '<div style="padding:20px;text-align:center;color:var(--green);font-size:13px;">✅ No duplicate registrations detected.</div>';
+        return;
+      }
+      el.innerHTML = '<table style="width:100%;border-collapse:collapse;">' +
+        '<tr style="color:var(--text-3);font-size:11px;text-transform:uppercase;">' +
+        '<th style="padding:6px 8px;text-align:left;">Time</th>' +
+        '<th style="padding:6px 8px;text-align:left;">Attempted Name</th>' +
+        '<th style="padding:6px 8px;text-align:left;">Phone</th>' +
+        '<th style="padding:6px 8px;text-align:left;">Matched Voter</th>' +
+        '<th style="padding:6px 8px;text-align:left;">Distance</th></tr>' +
+        d.alerts.map(function(a) {
+          return '<tr style="border-top:1px solid var(--border);font-size:12.5px;">' +
+            '<td style="padding:7px 8px;color:var(--text-2);">' + new Date(a.detectedAt).toLocaleString() + '</td>' +
+            '<td style="padding:7px 8px;font-weight:700;color:var(--amber);">' + a.attemptedName + '</td>' +
+            '<td style="padding:7px 8px;color:var(--text-2);">' + (a.attemptedPhone || '—') + '</td>' +
+            '<td style="padding:7px 8px;color:var(--text-1);">' + a.matchedName + ' <span style="color:var(--text-3);font-size:11px;">(' + a.matchedVoterId + ')</span></td>' +
+            '<td style="padding:7px 8px;font-family:monospace;color:var(--red);">' + a.distance + '</td></tr>';
+        }).join('') + '</table>';
+    } catch(e) { el.innerHTML = '<div style="padding:20px;color:var(--red);">Error loading alerts.</div>'; }
+  }
+
+  async function loadSecurityEvents() {
+    const el = document.getElementById('security-events-table');
+    try {
+      const r = await apiFetch('/api/admin/security/events?limit=50');
+      const d = await r.json();
+      if (!d.events || d.events.length === 0) {
+        el.innerHTML = '<div style="padding:20px;text-align:center;color:var(--green);font-size:13px;">✅ No security events recorded.</div>';
+        return;
+      }
+      const typeColors = {
+        'DEEPFAKE_REJECTED': 'var(--red)',
+        'CHAIN_TAMPER':      'var(--red)',
+        'DUPLICATE_FACE':    'var(--amber)',
+        'CSRF_REJECTED':     'var(--amber)',
+        'REPLAY_ATTACK':     'var(--red)',
+        'CHAIN_VERIFIED':    'var(--green)',
+        'CHAIN_WRITE_FAIL':  'var(--red)'
+      };
+      el.innerHTML = '<table style="width:100%;border-collapse:collapse;">' +
+        '<tr style="color:var(--text-3);font-size:11px;text-transform:uppercase;">' +
+        '<th style="padding:6px 8px;text-align:left;">Time</th>' +
+        '<th style="padding:6px 8px;text-align:left;">Type</th>' +
+        '<th style="padding:6px 8px;text-align:left;">IP</th>' +
+        '<th style="padding:6px 8px;text-align:left;">Detail</th></tr>' +
+        d.events.map(function(e) {
+          var col = typeColors[e.type] || 'var(--text-2)';
+          return '<tr style="border-top:1px solid var(--border);font-size:12px;">' +
+            '<td style="padding:6px 8px;color:var(--text-3);">' + new Date(e.timestamp).toLocaleString() + '</td>' +
+            '<td style="padding:6px 8px;font-weight:700;color:' + col + ';">' + e.type + '</td>' +
+            '<td style="padding:6px 8px;font-family:monospace;color:var(--text-2);">' + e.ip + '</td>' +
+            '<td style="padding:6px 8px;color:var(--text-1);">' + e.detail + '</td></tr>';
+        }).join('') + '</table>';
+    } catch(e) { el.innerHTML = '<div style="padding:20px;color:var(--red);">Error loading events.</div>'; }
+  }
+
+  // Wire security tab buttons
+  document.getElementById('verify-chain-btn').addEventListener('click', async function() {
+    this.disabled = true; this.textContent = '⏳ Verifying…';
+    await apiFetch('/api/admin/blockchain/verify', { method: 'POST' });
+    await loadChainStatus();
+    this.disabled = false; this.textContent = '🔍 Verify Now';
+  });
+  document.getElementById('refresh-events-btn').addEventListener('click', function() { loadSecurityEvents(); });
+
+  // Load security tab when selected
+  document.querySelectorAll('.sidebar-btn[data-tab]').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+      if (btn.dataset.tab === 'security') loadSecurityDashboard();
     });
   });
 

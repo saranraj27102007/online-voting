@@ -28,6 +28,10 @@ let helmet, rateLimit;
 try { helmet    = require('helmet');             } catch(e) { helmet    = null; }
 try { rateLimit = require('express-rate-limit'); } catch(e) { rateLimit = null; }
 
+// ── Security modules ─────────────────────────────────────────
+const Blockchain = require('./blockchain');
+const Liveness   = require('./liveness');
+
 const app  = express();
 const PORT = process.env.PORT || 3000;
 app.disable('x-powered-by');
@@ -37,6 +41,7 @@ const VOTERS_FILE    = path.join(DATA_DIR, 'voters.json');
 const ADMINS_FILE    = path.join(DATA_DIR, 'admins.json');
 const ELECTIONS_FILE = path.join(DATA_DIR, 'elections.json');
 const VOTES_FILE     = path.join(DATA_DIR, 'votes.json');
+const DUPLOG_FILE    = path.join(DATA_DIR, 'duplicate_alerts.json');
 
 // ── Helmet security headers ──────────────────────────────────
 if (helmet) {
@@ -84,7 +89,45 @@ const apiLimit        = lim(100, 60*1000,    'API rate limit hit.');
 const ocrLimit        = lim(20,  10*60*1000, 'OCR limit — wait 10 minutes.');
 app.use(globalLimit);
 
-// ── Brute-force (admin login) ────────────────────────────────
+// ── CSRF — double-submit cookie pattern ──────────────────────
+// A CSRF token is issued on GET /api/csrf-token and must be
+// sent back in X-CSRF-Token header on all state-changing requests.
+const csrfTokens = new Map(); // sessionID → token
+const CSRF_TTL   = 8 * 60 * 60 * 1000; // 8h matches session
+
+function generateCsrfToken(sessionId) {
+  const token = crypto.randomBytes(32).toString('hex');
+  csrfTokens.set(sessionId, { token, exp: Date.now() + CSRF_TTL });
+  return token;
+}
+function validateCsrf(req) {
+  // Skip for GET/HEAD/OPTIONS (safe methods)
+  if (['GET','HEAD','OPTIONS'].includes(req.method)) return true;
+  const sid   = req.session?.id;
+  const entry = sid ? csrfTokens.get(sid) : null;
+  if (!entry || Date.now() > entry.exp) return false;
+  const header = req.headers['x-csrf-token'] || req.body?._csrf || '';
+  return crypto.timingSafeEqual(
+    Buffer.from(header.padEnd(64, '0').slice(0, 64)),
+    Buffer.from(entry.token.padEnd(64, '0').slice(0, 64))
+  );
+}
+// CSRF middleware — applies to all /api state-changing routes
+function csrfGuard(req, res, next) {
+  if (!validateCsrf(req)) {
+    Liveness.logSecurityEvent('CSRF_REJECTED', req.path, req.ip);
+    return res.status(403).json({ error: 'Invalid or missing CSRF token.' });
+  }
+  next();
+}
+
+// ── Vote replay protection ────────────────────────────────────
+// Track vote submission IDs to prevent double-submit on network retry
+const voteReplayMap = new Map(); // idempotencyKey → timestamp
+setInterval(() => {
+  const cutoff = Date.now() - 30 * 60 * 1000;
+  for (const [k, t] of voteReplayMap) { if (t < cutoff) voteReplayMap.delete(k); }
+}, 10 * 60 * 1000);
 const bfMap = new Map();
 const bfCheck = ip=>{ const e=bfMap.get(ip)||{count:0,until:0}; return e.until>Date.now()?{locked:true,secs:Math.ceil((e.until-Date.now())/1000)}:{locked:false}; };
 const bfFail  = ip=>{ const e=bfMap.get(ip)||{count:0,until:0}; e.count++; if(e.count>=5){e.until=Date.now()+15*60*1000;e.count=0;} bfMap.set(ip,e); };
@@ -118,6 +161,37 @@ app.use(express.static(path.join(__dirname,'public'),{
 
 // Trust Railway reverse proxy
 app.set('trust proxy', 1);
+
+// ── CSRF token endpoint (no guard — issues the token) ────────
+app.get('/api/csrf-token', (req, res) => {
+  if (!req.session.id) return res.status(400).json({ error: 'No session.' });
+  const token = generateCsrfToken(req.session.id);
+  res.json({ csrfToken: token });
+});
+
+// ── Liveness challenge endpoints ─────────────────────────────
+// GET  /api/liveness/challenge  → { token, challenges }
+// POST /api/liveness/validate   → { valid, reason? }
+app.get('/api/liveness/challenge', (req, res) => {
+  const { token, challenges } = Liveness.generateChallenges();
+  res.json({ token, challenges });
+});
+
+app.post('/api/liveness/validate', apiLimit, (req, res) => {
+  const { token, results, metrics } = req.body;
+  if (!token || !results) return res.status(400).json({ error: 'token and results required.' });
+  const outcome = Liveness.validateChallenges(token, results, metrics);
+  if (!outcome.valid) {
+    Liveness.logSecurityEvent('DEEPFAKE_REJECTED', outcome.reason, req.ip);
+    return res.status(403).json({ error: outcome.reason });
+  }
+  // Issue a short-lived liveness clearance on the session
+  if (req.session) {
+    req.session.livenessCleared   = true;
+    req.session.livenessClearedAt = Date.now();
+  }
+  res.json({ valid: true });
+});
 
 // Session
 const SESSION_SECRET = process.env.SESSION_SECRET || 'votesecure-dev-change-in-production';
@@ -153,6 +227,7 @@ function initData(){
   if(!fs.existsSync(ADMINS_FILE)) writeJSON(ADMINS_FILE,[{id:'admin-001',name:'Chief Administrator',username:'admin',password:bcrypt.hashSync('admin123',12),createdAt:new Date().toISOString()}]);
   if(!fs.existsSync(VOTERS_FILE))    writeJSON(VOTERS_FILE,[]);
   if(!fs.existsSync(VOTES_FILE))     writeJSON(VOTES_FILE,[]);
+  if(!fs.existsSync(DUPLOG_FILE))    writeJSON(DUPLOG_FILE,[]);
   if(!fs.existsSync(ELECTIONS_FILE)) writeJSON(ELECTIONS_FILE,[{
     id:'election-001',title:'General Election 2025',description:'Cast your vote.',
     startDate:new Date().toISOString(),endDate:new Date(Date.now()+7*24*60*60*1000).toISOString(),
@@ -545,7 +620,27 @@ app.post('/api/voter/register', registerLimit, (req,res)=>{
     const thresh = descType==='faceapi' ? FACEAPI_THRESH : descType==='ai' ? AI_THRESH : PIXEL_THRESH;
     if(d<thresh) faceMatch=v;
   }
-  if(faceMatch) return res.status(409).json({error:'DUPLICATE_VOTER',type:'face',message:'This face/photo is already registered.',existingVoterId:faceMatch.voterId,existingName:faceMatch.name});
+  if(faceMatch) {
+    // Log the duplicate attempt for admin review
+    try {
+      const dupLog = readJSON(DUPLOG_FILE);
+      dupLog.unshift({
+        id: uuidv4(),
+        type: 'face',
+        attemptedName: cName,
+        attemptedPhone: '****' + cPhone.slice(-4),
+        matchedVoterId: faceMatch.voterId,
+        matchedName: faceMatch.name,
+        distance: parseFloat(minD.toFixed(4)),
+        ip: req.ip,
+        detectedAt: new Date().toISOString()
+      });
+      if (dupLog.length > 200) dupLog.length = 200;
+      writeJSON(DUPLOG_FILE, dupLog);
+      Liveness.logSecurityEvent('DUPLICATE_FACE', `${cName} matched ${faceMatch.name} (d=${minD.toFixed(3)})`, req.ip);
+    } catch(e) { /* non-critical */ }
+    return res.status(409).json({error:'DUPLICATE_VOTER',type:'face',message:'Duplicate face detected — voter already registered.',existingVoterId:faceMatch.voterId,existingName:faceMatch.name});
+  }
 
   const voterId='VTR-'+crypto.randomBytes(3).toString('hex').toUpperCase();
   voters.push({
@@ -683,6 +778,16 @@ app.get('/api/voter/elections', needFaceVerified, (req,res)=>{
 
 app.post('/api/voter/vote', needFaceVerified, apiLimit, (req,res)=>{
   const elId=sanitize(req.body.electionId||''),cId=sanitize(req.body.candidateId||'');
+  const idempKey = req.body.idempotencyKey ? sanitize(req.body.idempotencyKey) : null;
+
+  // ── Vote replay protection ────────────────────────────────
+  if (idempKey) {
+    if (voteReplayMap.has(idempKey)) {
+      return res.status(409).json({ error: 'Duplicate vote submission detected.' });
+    }
+    voteReplayMap.set(idempKey, Date.now());
+  }
+
   const elections=readJSON(ELECTIONS_FILE),votes=readJSON(VOTES_FILE),voters=readJSON(VOTERS_FILE),vid=req.session.voter.id;
   const el=elections.find(e=>e.id===elId);
   if(!el)                  return res.status(404).json({error:'Election not found.'});
@@ -690,7 +795,7 @@ app.post('/api/voter/vote', needFaceVerified, apiLimit, (req,res)=>{
   const now=new Date();
   if(now<new Date(el.startDate)||now>new Date(el.endDate)) return res.status(400).json({error:'Election not currently open.'});
 
-  // Age restriction checked here only (NOT at registration)
+  // Age restriction
   const minA=el.minAge||0,maxA=el.maxAge||0;
   if(minA>0||maxA>0){
     const vr=voters.find(v=>v.id===vid);
@@ -704,9 +809,32 @@ app.post('/api/voter/vote', needFaceVerified, apiLimit, (req,res)=>{
   if(votes.find(v=>v.electionId===elId&&v.voterId===vid)) return res.status(400).json({error:'Already voted in this election.'});
   const c=el.candidates.find(c=>c.id===cId);
   if(!c) return res.status(400).json({error:'Invalid candidate.'});
-  votes.push({id:uuidv4(),electionId:elId,voterId:vid,voterName:req.session.voter.name,candidateId:cId,votedAt:new Date().toISOString()});
+
+  // ── Blockchain: verify chain integrity before accepting vote ──
+  const chainStatus = Blockchain.verifyChain();
+  if (!chainStatus.valid) {
+    Liveness.logSecurityEvent('CHAIN_TAMPER', `Block ${chainStatus.failedAt}: ${chainStatus.error}`, req.ip);
+    return res.status(500).json({ error: 'Voting system integrity check failed. Contact administrator.' });
+  }
+
+  // ── Write vote to JSON store ───────────────────────────────
+  const voteId = uuidv4();
+  votes.push({id:voteId,electionId:elId,voterId:vid,voterName:req.session.voter.name,candidateId:cId,votedAt:new Date().toISOString()});
   writeJSON(VOTES_FILE,votes);
-  res.json({success:true,message:`Vote cast for ${c.name}!`});
+
+  // ── Write vote to blockchain ───────────────────────────────
+  let block;
+  try {
+    block = Blockchain.addVoteBlock({ voterId: vid, electionId: elId, candidateId: cId });
+  } catch(chainErr) {
+    // Chain write failed — roll back JSON vote (atomicity)
+    const updatedVotes = readJSON(VOTES_FILE).filter(v => v.id !== voteId);
+    writeJSON(VOTES_FILE, updatedVotes);
+    Liveness.logSecurityEvent('CHAIN_WRITE_FAIL', chainErr.message, req.ip);
+    return res.status(500).json({ error: 'Vote recording failed. Please try again.' });
+  }
+
+  res.json({success:true, message:`Vote cast for ${c.name}!`, blockIndex: block.blockIndex});
 });
 
 // ══════════════════════════════════════════════════════════════
@@ -774,7 +902,15 @@ app.post('/api/admin/elections', needAdmin, (req,res)=>{
   if(mn>0&&mx>0&&mn>=mx) return res.status(400).json({error:'Min age must be less than max age.'});
   const colors=['#4f46e5','#059669','#dc2626','#d97706','#7c3aed','#0891b2'];
   const elections=readJSON(ELECTIONS_FILE);
-  elections.push({id:uuidv4(),title:cTitle,description:sanitize(description||''),startDate:new Date(startDate).toISOString(),endDate:new Date(endDate).toISOString(),status:'active',minAge:mn,maxAge:mx,candidates:candidates.map((c,i)=>({id:uuidv4().slice(0,8),name:sanitizeName(c.name||''),party:sanitize(c.party||''),symbol:sanitize(c.symbol||'⭐'),color:colors[i%colors.length]})),createdAt:new Date().toISOString()});
+  elections.push({id:uuidv4(),title:cTitle,description:sanitize(description||''),startDate:new Date(startDate).toISOString(),endDate:new Date(endDate).toISOString(),status:'active',minAge:mn,maxAge:mx,candidates:candidates.map((c,i)=>{
+    // Validate and store candidate image (base64 PNG/JPG, max 512KB)
+    let img = '';
+    if(c.image && typeof c.image === 'string' && c.image.startsWith('data:image/')) {
+      const sizeBytes = Buffer.byteLength(c.image, 'utf8');
+      if(sizeBytes <= 512 * 1024) img = c.image;
+    }
+    return {id:uuidv4().slice(0,8),name:sanitizeName(c.name||''),party:sanitize(c.party||''),symbol:sanitize(c.symbol||'⭐'),image:img,color:colors[i%colors.length]};
+  }),createdAt:new Date().toISOString()});
   writeJSON(ELECTIONS_FILE,elections);
   res.json({success:true});
 });
@@ -808,6 +944,68 @@ app.get('/api/admin/votes', needAdmin, (req,res)=>{
   res.json(votes.map(v=>{const e=elections.find(el=>el.id===v.electionId),c=e?.candidates.find(c=>c.id===v.candidateId);return {...v,electionTitle:e?.title,candidateName:c?.name};}).reverse());
 });
 
+// ── Security Dashboard ────────────────────────────────────────
+
+// Blockchain status + chain audit
+app.get('/api/admin/blockchain/status', needAdmin, (req,res) => {
+  const status = Blockchain.getChainStatus();
+  res.json(status);
+});
+
+app.get('/api/admin/blockchain/blocks', needAdmin, (req,res) => {
+  const electionId = req.query.electionId || null;
+  const blocks = Blockchain.getVoteBlocks(electionId);
+  res.json({ blocks, total: blocks.length });
+});
+
+// Force re-verify chain (admin action)
+app.post('/api/admin/blockchain/verify', needAdmin, (req,res) => {
+  const result = Blockchain.verifyChain();
+  Liveness.logSecurityEvent(
+    result.valid ? 'CHAIN_VERIFIED' : 'CHAIN_TAMPER',
+    result.valid ? `Chain OK — ${result.length} blocks` : `Failed at block ${result.failedAt}: ${result.error}`,
+    req.ip
+  );
+  res.json(result);
+});
+
+// Duplicate voter alerts log
+app.get('/api/admin/security/duplicates', needAdmin, (req,res) => {
+  const log = fs.existsSync(DUPLOG_FILE) ? readJSON(DUPLOG_FILE) : [];
+  res.json({ alerts: log, total: log.length });
+});
+
+// Security event log (deepfake rejections, CSRF, etc.)
+app.get('/api/admin/security/events', needAdmin, (req,res) => {
+  const limit = Math.min(parseInt(req.query.limit) || 100, 500);
+  res.json({ events: Liveness.getSecurityLog(limit) });
+});
+
+// Security summary for overview panel
+app.get('/api/admin/security/summary', needAdmin, (req,res) => {
+  const chainStatus = Blockchain.getChainStatus();
+  const dupLog      = fs.existsSync(DUPLOG_FILE) ? readJSON(DUPLOG_FILE) : [];
+  const events      = Liveness.getSecurityLog(500);
+  const deepfakes   = events.filter(e => e.type === 'DEEPFAKE_REJECTED').length;
+  const csrfBlocked = events.filter(e => e.type === 'CSRF_REJECTED').length;
+  const recentDups  = dupLog.filter(d => Date.now() - new Date(d.detectedAt) < 24*60*60*1000).length;
+  res.json({
+    blockchain: {
+      valid:   chainStatus.valid,
+      blocks:  chainStatus.length,
+      error:   chainStatus.error || null
+    },
+    duplicates: {
+      total:   dupLog.length,
+      last24h: recentDups
+    },
+    attacks: {
+      deepfakeRejections: deepfakes,
+      csrfBlocked
+    }
+  });
+});
+
 // ══════════════════════════════════════════════════════════════
 // PAGES — ⛔ /vote and /admin BLOCKED server-side without session
 // ══════════════════════════════════════════════════════════════
@@ -823,11 +1021,22 @@ app.use((_,res)=>res.status(404).json({error:'Not found.'}));
 app.use((err,req,res,next)=>{console.error(err.message);res.status(500).json({error:'Server error.'});});
 
 initData();
+
+// Initialise and verify blockchain on startup
+const chainInit = Blockchain.initChain();
+if (!chainInit.valid) {
+  console.error(`⛔  BLOCKCHAIN INTEGRITY FAILURE — ${chainInit.error}`);
+  console.error('    Votes will be rejected until the chain is repaired.');
+}
+
 app.listen(PORT,()=>{
   console.log(`\n🔒 VoteSecure — Hardened`);
   console.log(`🌐  http://localhost:${PORT}`);
   console.log(`\n✅  Helmet · Rate-limit · Brute-force lockout`);
   console.log(`✅  Session fixation prevention · Atomic writes`);
   console.log(`✅  Path traversal blocked · Input sanitised`);
+  console.log(`✅  CSRF double-submit protection`);
+  console.log(`✅  Vote replay prevention`);
+  console.log(`🔗  Blockchain: ${chainInit.valid ? `verified (${chainInit.length} blocks)` : '⛔ INTEGRITY FAILURE'}`);
   console.log(`⛔  /vote and /admin — server blocks without session\n`);
 });

@@ -233,8 +233,13 @@
       cc.dataset.symbol       = c.symbol;
       cc.dataset.name         = c.name;
       cc.dataset.party        = c.party;
+      cc.dataset.image        = c.image || '';
+      // Show image if available, else emoji symbol
+      var symbolHtml = c.image
+        ? '<div class="candidate-symbol" style="padding:4px;"><img src="' + c.image + '" alt="' + esc(c.name) + '" style="width:72px;height:72px;border-radius:50%;object-fit:cover;border:3px solid var(--border);"/></div>'
+        : '<span class="candidate-symbol">' + c.symbol + '</span>';
       cc.innerHTML =
-        '<span class="candidate-symbol">' + c.symbol + '</span>' +
+        symbolHtml +
         '<div class="candidate-name">' + esc(c.name) + '</div>' +
         '<div class="candidate-party">' + esc(c.party) + '</div>';
       cc.addEventListener('click', onSelectCandidate);
@@ -314,7 +319,8 @@
       candidateId: cc.dataset.candidateId,
       symbol:      cc.dataset.symbol,
       name:        cc.dataset.name,
-      party:       cc.dataset.party
+      party:       cc.dataset.party,
+      image:       cc.dataset.image || ''
     };
 
     // Enable vote button for THIS election only
@@ -327,7 +333,13 @@
     var sel = selections[electionId];
     if (!sel) return;
     activeElectionId = electionId;
-    confirmSymbol.textContent = sel.symbol;
+    // Show image or emoji in modal
+    if (sel.image) {
+      confirmSymbol.innerHTML = '<img src="' + sel.image + '" alt="' + sel.name + '" style="width:90px;height:90px;border-radius:50%;object-fit:cover;border:3px solid var(--border);"/>';
+    } else {
+      confirmSymbol.innerHTML = '';
+      confirmSymbol.textContent = sel.symbol;
+    }
     confirmName.textContent   = sel.name;
     confirmParty.textContent  = sel.party;
     modalAlert.innerHTML = '';
