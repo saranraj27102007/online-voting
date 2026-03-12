@@ -998,6 +998,11 @@
      SECURITY DASHBOARD
   ════════════════════════════════════════════════════ */
 
+  // Shared fetch helper with credentials — used throughout security dashboard
+  function apiFetch(url, opts) {
+    return fetch(url, Object.assign({ credentials: 'include' }, opts || {}));
+  }
+
   async function loadSecurityDashboard() {
     await Promise.all([loadSecuritySummary(), loadChainStatus(), loadDupAlerts(), loadSecurityEvents()]);
   }
@@ -1022,8 +1027,11 @@
   }
 
   function statCard(label, value, color, sub) {
+    // Use smaller font for text values (e.g. "Verified", "TAMPERED") vs numbers
+    var isText = typeof value === 'string' && isNaN(value);
+    var valStyle = 'color:' + color + ';' + (isText ? 'font-size:1.1rem;' : '');
     return '<div class="stat-card"><div class="stat-label">' + label + '</div>' +
-      '<div class="stat-value" style="color:' + color + '">' + value + '</div>' +
+      '<div class="stat-value" style="' + valStyle + '">' + value + '</div>' +
       '<div style="font-size:11.5px;color:var(--text-3);margin-top:4px;">' + sub + '</div></div>';
   }
 
